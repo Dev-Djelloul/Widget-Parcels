@@ -12,6 +12,8 @@ const emptyState = document.querySelector('#empty-state');
 const parcelTrackingLink = document.querySelector('#parcel-tracking-link');
 const trackingSummary = document.querySelector('#tracking-summary');
 const trackingEvents = document.querySelector('#tracking-events');
+const parcelWidgetDetails = document.querySelector('#parcel-widget-details');
+const parcelWidget = document.querySelector('#parcels-widget');
 const trackingCountryForm = document.querySelector('#tracking-country-form');
 const trackingDestinationCountry = document.querySelector('#tracking-destination-country');
 const weatherButton = document.querySelector('#weather-button');
@@ -273,6 +275,33 @@ function detectCarrier(trackingNumber) {
   };
 }
 
+function getShipmentCarrier(shipment) {
+  const detected = detectCarrier(shipment.number);
+  const name = typeof shipment.tracking?.carrier === 'string' && shipment.tracking.carrier.trim()
+    ? shipment.tracking.carrier.trim()
+    : detected.label;
+  if (!shipment.tracking?.carrier) return detected;
+
+  const normalizedName = name.toLocaleLowerCase();
+  const knownCarriers = [
+    { pattern: /la poste|colissimo/, id: 'laposte', mark: 'LP' },
+    { pattern: /royal mail/, id: 'royal-mail', mark: 'RM' },
+    { pattern: /fedex/, id: 'fedex', mark: 'FedEx' },
+    { pattern: /\bups\b/, id: 'ups', mark: 'UPS' },
+    { pattern: /\bdhl\b/, id: 'dhl', mark: 'DHL' },
+    { pattern: /postnl/, id: 'postnl', mark: 'postNL' },
+    { pattern: /\busps\b/, id: 'usps', mark: 'USPS' }
+  ];
+  const known = knownCarriers.find(carrier => carrier.pattern.test(normalizedName));
+  const mark = known?.mark ?? name.replace(/[^A-Za-z0-9]/g, '').slice(0, 4).toUpperCase() ?? detected.mark;
+  return {
+    ...detected,
+    id: known?.id ?? 'generic',
+    label: name,
+    mark: mark || detected.mark
+  };
+}
+
 function setOutboundLinkBehavior(link) {
   if (!(link instanceof HTMLAnchorElement) || !link.href) return;
   try {
@@ -291,6 +320,24 @@ document.addEventListener('click', event => {
 });
 
 function updateParcelTrackingLink() {
+  const widgetUrl = new URL('https://parcelsapp.com/widget');
+  widgetUrl.search = new URLSearchParams({
+    textButton: 'Suivre le colis',
+    placeholder: 'Entrez votre numéro de suivi',
+    backgroundColorButton: '#2f6b55',
+    colorButton: '#ffffff',
+    borderRadiusButton: '10px',
+    borderRadiusInput: '10px',
+    widgetWrapBorder: '0',
+    widgetWrapBorderRadius: '12px',
+    ...(selectedTracking ? { trackingNumber: selectedTracking } : {})
+  }).toString();
+  parcelWidget.dataset.src = selectedTracking ? widgetUrl.toString() : '';
+  if (parcelWidgetDetails.open && selectedTracking) {
+    parcelWidget.src = widgetUrl.toString();
+  } else if (!selectedTracking) {
+    parcelWidget.src = 'about:blank';
+  }
   if (selectedTracking) {
     parcelTrackingLink.href = `https://parcelsapp.com/en/tracking/${encodeURIComponent(selectedTracking)}`;
   } else {
@@ -302,11 +349,12 @@ function updateParcelTrackingLink() {
 function renderTrackingHistory(shipment) {
   trackingSummary.replaceChildren();
   trackingEvents.replaceChildren();
+  const events = Array.isArray(shipment?.tracking?.events) ? shipment.tracking.events : [];
+  const flightLegs = Array.isArray(shipment?.tracking?.flightLegs) ? shipment.tracking.flightLegs : [];
+  parcelWidgetDetails.hidden = !shipment?.tracking || events.length > 0 || flightLegs.length > 0;
   trackingCountryForm.hidden = !shipment?.tracking?.needsDestinationCountry;
   trackingDestinationCountry.value =
     shipment?.destinationCountry ?? shipment?.route?.destination?.country ?? '';
-  const events = Array.isArray(shipment?.tracking?.events) ? shipment.tracking.events : [];
-  const flightLegs = Array.isArray(shipment?.tracking?.flightLegs) ? shipment.tracking.flightLegs : [];
 
   if (!shipment) {
     const message = document.createElement('p');
@@ -325,21 +373,21 @@ function renderTrackingHistory(shipment) {
 
   const summaryDetails = document.createElement('span');
   summaryDetails.className = 'tracking-summary-details';
-  const carrier = shipment.tracking?.carrier || detectCarrier(shipment.number).label;
+  const carrier = getShipmentCarrier(shipment).label;
   const stops = isValidStoredRoute(shipment.route)
     ? [shipment.route.origin.name, shipment.route.destination.name]
     : [];
   summaryDetails.textContent = [
     carrier,
     stops.length ? `${stops[0]} → ${stops[1]}` : '',
-    `${events.length} ${events.length === 1 ? 'étape' : 'étapes'}`
+    `${events.length + flightLegs.length} ${events.length + flightLegs.length === 1 ? 'étape' : 'étapes'}`
   ].filter(Boolean).join(' · ');
   trackingSummary.append(summaryDetails);
 
   if (shipment.tracking?.error) {
     const message = document.createElement('p');
     message.className = 'tracking-summary-message';
-    message.textContent = shipment.tracking.error;
+    message.textContent = shipment.tracking.error.replace(/\s*\(Parcels API v4[^)]*\)/g, '');
     trackingEvents.append(message);
   }
 
@@ -349,7 +397,7 @@ function renderTrackingHistory(shipment) {
     message.textContent = shipment.tracking?.error
       ? ''
       : shipment.tracking
-        ? 'Aucun événement détaillé n’est encore fourni par le transporteur.'
+        ? `Parcels a reconnu ${getShipmentCarrier(shipment).label}, mais n’a renvoyé aucun événement détaillé pour ce colis. Le suivi complet est accessible via le lien Parcel App ci-dessous.`
         : 'Cliquez sur « Suivre » dans Mes colis pour demander les étapes détaillées à Parcels.';
     if (message.textContent) trackingEvents.append(message);
     return;
@@ -411,6 +459,12 @@ function renderTrackingHistory(shipment) {
   }
 }
 
+parcelWidgetDetails.addEventListener('toggle', () => {
+  if (parcelWidgetDetails.open && parcelWidget.dataset.src && parcelWidget.src !== parcelWidget.dataset.src) {
+    parcelWidget.src = parcelWidget.dataset.src;
+  }
+});
+
 function renderShipments() {
   shipmentList.replaceChildren();
   shipmentCount.textContent = String(shipments.length);
@@ -422,7 +476,7 @@ function renderShipments() {
 
     const icon = document.createElement('span');
     icon.className = 'shipment-icon';
-    const carrier = detectCarrier(shipment.number);
+    const carrier = getShipmentCarrier(shipment);
     icon.dataset.carrier = carrier.id;
     icon.textContent = carrier.mark;
     icon.title = carrier.label;
@@ -864,7 +918,7 @@ async function requestParcelTracking(trackingNumber, requestId, destinationCount
   }
   if (!response.ok) {
     const message = result.error || `Suivi indisponible (${response.status}).`;
-    const error = new Error(result.detail ? `${message} (${result.detail})` : message);
+    const error = new Error(message);
     error.needsDestinationCountry = result.needsDestinationCountry === true;
     throw error;
   }

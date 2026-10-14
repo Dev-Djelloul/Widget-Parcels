@@ -16,7 +16,11 @@ function json(body, status = 200) {
 }
 
 function getShipment(data) {
-  return data.results?.find(result => result.state !== 'rejected')?.shipment ?? null;
+  return data.results?.find(result => result.state === 'completed' && result.shipment)?.shipment ?? null;
+}
+
+function hasProcessingShipment(data) {
+  return data.results?.some(result => result.state === 'processing') ?? false;
 }
 
 function routePlace(shipment, field, flightField) {
@@ -184,7 +188,7 @@ export async function onRequestPost({ request, env }) {
   if (!data || typeof data.done !== 'boolean') {
     return json({ error: 'Réponse incomplète de l’API Parcels.' }, 502);
   }
-  if (!data.done) {
+  if (!data.done || hasProcessingShipment(data)) {
     return typeof data.request_id === 'string'
       ? json({ pending: true, requestId: data.request_id }, 202)
       : json({ error: 'Identifiant de requête manquant dans la réponse Parcels.' }, 502);
@@ -207,7 +211,11 @@ export async function onRequestPost({ request, env }) {
       needsDestinationCountry: ['NO_SHIPMENTS', 'DESTINATION_COUNTRY_REQUIRED'].includes(shipment.error)
     }, 422);
   }
-  const states = Array.isArray(shipment.states) ? shipment.states : [];
+  const states = [
+    shipment.states,
+    shipment.events,
+    shipment.tracking_events
+  ].find(events => Array.isArray(events) && events.length > 0) ?? [];
   return json({
     origin: routePlace(shipment, 'origin', 'origin'),
     destination: routePlace(shipment, 'destination', 'destination'),
@@ -218,9 +226,11 @@ export async function onRequestPost({ request, env }) {
         ? shipment.services[0].name
         : null,
     events: states.slice(0, 80).flatMap(state => {
-      if (!state || typeof state.state !== 'string') return [];
+      const description = [state?.state, state?.status, state?.description, state?.title]
+        .find(value => typeof value === 'string' && value.trim());
+      if (!description) return [];
       return [{
-        state: state.state.slice(0, 300),
+        state: description.slice(0, 300),
         location: typeof state.location === 'string' ? state.location.slice(0, 200) : null,
         date: typeof state.date === 'string' ? state.date : null,
         eventCode: typeof state.event_code === 'string' ? state.event_code.slice(0, 40) : null,

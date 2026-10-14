@@ -146,6 +146,17 @@
                 <p class="tracking-summary-message">Ajoutez ou sélectionnez un colis pour afficher ses étapes de suivi.</p>
               </div>
               <ol class="tracking-events" id="tracking-events" aria-label="Historique des événements du colis"></ol>
+              <details class="parcel-widget-details" id="parcel-widget-details" hidden>
+                <summary>Afficher les étapes complètes de Parcel App</summary>
+                <div class="parcel-widget-frame">
+                  <iframe
+                    id="parcels-widget"
+                    title="Étapes détaillées du colis sur Parcel App"
+                    loading="lazy"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    allow="clipboard-read; clipboard-write"></iframe>
+                </div>
+              </details>
               <form class="tracking-country-form" id="tracking-country-form" hidden>
                 <p>Impossible d’associer ce numéro à un envoi. Indiquez ou corrigez le pays de destination, nécessaire pour certains transporteurs, puis relancez la recherche.</p>
                 <label class="visually-hidden" for="tracking-destination-country">Pays de destination</label>
