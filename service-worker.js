@@ -1,9 +1,13 @@
-const CACHE_NAME = 'widget-parcels-pwa-v3';
+const CACHE_NAME = 'widget-parcels-pwa-v4';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './vendor/maplibre-gl/maplibre-gl.mjs',
+  './vendor/maplibre-gl/maplibre-gl-worker.mjs',
+  './vendor/maplibre-gl/maplibre-gl-shared.mjs',
+  './vendor/maplibre-gl/maplibre-gl.css',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png'

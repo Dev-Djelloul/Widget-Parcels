@@ -1,3 +1,5 @@
+import { Map as MapLibreMap, Marker, NavigationControl, Popup } from './vendor/maplibre-gl/maplibre-gl.mjs';
+
 const STORAGE_KEY = 'colis-saved-trackings';
 const THEME_KEY = 'colis-theme';
 const SIDEBAR_KEY = 'colis-sidebar-collapsed';
@@ -98,7 +100,9 @@ function loadShipments() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
     return Array.isArray(stored)
-      ? stored.filter(item => typeof item?.number === 'string' && typeof item?.addedAt === 'string')
+      ? stored
+        .filter(item => typeof item?.number === 'string' && typeof item?.addedAt === 'string')
+        .map(item => ({ ...item, route: isValidStoredRoute(item.route) ? item.route : undefined }))
       : [];
   } catch (error) {
     formMessage.textContent = 'Les colis enregistrés n’ont pas pu être lus.';
@@ -363,6 +367,7 @@ function renderShipments() {
       selectedTracking = shipment.number;
       updateWidget();
       renderShipments();
+      updateSelectedParcelRoute();
       document.querySelector('#suivi').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
@@ -393,6 +398,7 @@ function renderShipments() {
       }
       updateWidget();
       renderShipments();
+      updateSelectedParcelRoute();
     });
     if (shipment.number === editingShipment) {
       actions.append(remove);
@@ -429,6 +435,7 @@ form.addEventListener('submit', event => {
   }
   updateWidget();
   renderShipments();
+  updateSelectedParcelRoute();
   input.value = '';
   showMessage('Colis ajouté à votre liste.');
 });
@@ -474,36 +481,6 @@ async function geocode(query) {
     throw new Error(`Aucun lieu trouvé pour « ${query} ». Essayez « ville, pays ».`);
   }
   return results.find(result => result.feature_code === 'PCLI') ?? results[0];
-}
-
-const mapMaps = {};
-function getMap(id, { center = [20, 0], zoom = 2 } = {}) {
-  if (!window.L) return null;
-  if (!mapMaps[id]) {
-    const map = L.map(id, { scrollWheelZoom: false }).setView(center, zoom);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(map);
-    mapMaps[id] = { map, layer: L.layerGroup().addTo(map) };
-  }
-  return mapMaps[id];
-}
-
-function showPoints(id, points) {
-  const element = document.getElementById(id);
-  element.hidden = false;
-  const entry = getMap(id);
-  if (!entry) return;
-  entry.layer.clearLayers();
-  points.forEach(point => L.marker([point.latitude, point.longitude]).bindPopup(point.label).addTo(entry.layer));
-  if (points.length > 1) {
-    L.polyline(points.map(point => [point.latitude, point.longitude]), { color: '#2f6b55', dashArray: '6 8', weight: 3 }).addTo(entry.layer);
-    entry.map.fitBounds(points.map(point => [point.latitude, point.longitude]), { padding: [30, 30] });
-  } else {
-    entry.map.setView([points[0].latitude, points[0].longitude], points[0].zoom ?? 8);
-  }
-  setTimeout(() => entry.map.invalidateSize(), 0);
 }
 
 const placeName = location => [location.name, location.admin1, location.country]
@@ -577,7 +554,213 @@ async function refreshCurrentWeather() {
 
 const parcelRouteForm = document.querySelector('#parcel-route-form');
 const parcelRouteResult = document.querySelector('#parcel-route-result');
-getMap('parcel-map');
+const parcelMapElement = document.querySelector('#parcel-map');
+let parcelGlobe;
+let parcelGlobeLoaded = false;
+let parcelGlobeMarkers = [];
+let parcelMapPoints = [];
+const routeRequests = new Set();
+
+function isValidStoredRoute(route) {
+  const isPoint = point =>
+    typeof point?.name === 'string' &&
+    Number.isFinite(point.latitude) && point.latitude >= -90 && point.latitude <= 90 &&
+    Number.isFinite(point.longitude) && point.longitude >= -180 && point.longitude <= 180;
+  return isPoint(route?.origin) && isPoint(route?.destination);
+}
+
+function greatCircle(from, to, steps = 64) {
+  const toVector = ({ latitude, longitude }) => {
+    const lat = latitude * Math.PI / 180;
+    const lon = longitude * Math.PI / 180;
+    return [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
+  };
+  const start = toVector(from);
+  const end = toVector(to);
+  const dot = Math.min(1, Math.max(-1, start.reduce((sum, value, index) => sum + value * end[index], 0)));
+  const angle = Math.acos(dot);
+  if (angle < 1e-6) return [[from.longitude, from.latitude], [to.longitude, to.latitude]];
+  const sinAngle = Math.sin(angle);
+  return Array.from({ length: steps + 1 }, (_, index) => {
+    const progress = index / steps;
+    const startWeight = Math.sin((1 - progress) * angle) / sinAngle;
+    const endWeight = Math.sin(progress * angle) / sinAngle;
+    const vector = start.map((value, axis) => startWeight * value + endWeight * end[axis]);
+    const latitude = Math.atan2(vector[2], Math.hypot(vector[0], vector[1])) * 180 / Math.PI;
+    const longitude = Math.atan2(vector[1], vector[0]) * 180 / Math.PI;
+    return [longitude, latitude];
+  });
+}
+
+function showParcelGlobePoints(points) {
+  parcelMapPoints = points;
+  parcelMapElement.hidden = false;
+  if (!parcelGlobeLoaded) return;
+
+  parcelGlobeMarkers.forEach(marker => marker.remove());
+  parcelGlobeMarkers = points.map((point, index) => {
+    const element = document.createElement('span');
+    element.className = `parcel-map-marker${index === 1 ? ' is-destination' : ''}`;
+    element.setAttribute('aria-hidden', 'true');
+    return new Marker({ element, anchor: 'center' })
+      .setLngLat([point.longitude, point.latitude])
+      .setPopup(new Popup({ offset: 12 }).setText(point.label))
+      .addTo(parcelGlobe);
+  });
+
+  const route = parcelGlobe.getSource('parcel-route');
+  route.setData({
+    type: 'FeatureCollection',
+    features: points.length > 1 ? [{
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'LineString', coordinates: greatCircle(points[0], points[1]) }
+    }] : []
+  });
+
+  if (points.length > 1) {
+    const toVector = ({ latitude, longitude }) => {
+      const lat = latitude * Math.PI / 180;
+      const lon = longitude * Math.PI / 180;
+      return [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
+    };
+    const origin = toVector(points[0]);
+    const destination = toVector(points[1]);
+    const midpoint = origin.map((value, axis) => value + destination[axis]);
+    const length = Math.hypot(...midpoint);
+    const center = length < 1e-6
+      ? [points[0].longitude, points[0].latitude]
+      : [
+        Math.atan2(midpoint[1], midpoint[0]) * 180 / Math.PI,
+        Math.atan2(midpoint[2], Math.hypot(midpoint[0], midpoint[1])) * 180 / Math.PI
+      ];
+    parcelGlobe.easeTo({ center, zoom: 0.7, duration: 900 });
+  } else if (points.length === 1) {
+    parcelGlobe.easeTo({ center: [points[0].longitude, points[0].latitude], zoom: 0.7, duration: 900 });
+  }
+}
+
+function initializeParcelGlobe() {
+  if (parcelGlobe) return;
+  parcelGlobe = new MapLibreMap({
+    container: parcelMapElement,
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    center: [0, 20],
+    zoom: 0.7,
+    projection: { type: 'globe' },
+    attributionControl: true,
+    scrollZoom: false
+  });
+  parcelGlobe.addControl(new NavigationControl(), 'top-right');
+  parcelGlobe.once('load', () => {
+    parcelGlobe.addSource('parcel-route', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+    parcelGlobe.addLayer({
+      id: 'parcel-route-line',
+      type: 'line',
+      source: 'parcel-route',
+      paint: { 'line-color': '#2f6b55', 'line-width': 3, 'line-dasharray': [2, 2] }
+    });
+    parcelGlobeLoaded = true;
+    showParcelGlobePoints(parcelMapPoints);
+  });
+}
+
+if ('IntersectionObserver' in window) {
+  const globeObserver = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) {
+      initializeParcelGlobe();
+      globeObserver.disconnect();
+    }
+  }, { rootMargin: '200px' });
+  globeObserver.observe(parcelMapElement);
+} else {
+  initializeParcelGlobe();
+}
+
+async function requestParcelTracking(trackingNumber, requestId) {
+  const carrier = detectCarrier(trackingNumber);
+  const body = requestId
+    ? { requestId }
+    : {
+      trackingNumber,
+      ...(carrier.id === 'generic' ? {} : { carrierHint: carrier.id })
+    };
+  const response = await fetch('/api/tracking', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store'
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || `Suivi indisponible (${response.status}).`);
+  return result;
+}
+
+async function updateSelectedParcelRoute() {
+  if (!selectedTracking) {
+    parcelRouteResult.textContent = 'Ajoutez un colis pour rechercher automatiquement son trajet.';
+    parcelRouteResult.classList.remove('is-error');
+    showParcelGlobePoints([]);
+    return;
+  }
+
+  const shipment = shipments.find(item => item.number === selectedTracking);
+  if (!shipment) return;
+  if (isValidStoredRoute(shipment.route)) {
+    showParcelGlobePoints([
+      { ...shipment.route.origin, label: `Provenance : ${shipment.route.origin.name}` },
+      { ...shipment.route.destination, label: `Destination : ${shipment.route.destination.name}` }
+    ]);
+    parcelRouteResult.textContent =
+      `${shipment.route.origin.name} → ${shipment.route.destination.name} · trajet indicatif`;
+    parcelRouteResult.classList.remove('is-error');
+    return;
+  }
+  if (routeRequests.has(selectedTracking)) return;
+
+  const trackingNumber = selectedTracking;
+  routeRequests.add(trackingNumber);
+  parcelRouteResult.textContent = 'Recherche du trajet auprès du transporteur…';
+  parcelRouteResult.classList.remove('is-error');
+  try {
+    let result = await requestParcelTracking(trackingNumber);
+    for (let attempt = 0; result.pending && attempt < 8; attempt += 1) {
+      await new Promise(resolve => window.setTimeout(resolve, 1500));
+      result = await requestParcelTracking(trackingNumber, result.requestId);
+    }
+    if (result.pending) throw new Error('Le transporteur n’a pas encore transmis les lieux du colis.');
+    if (!result.origin || !result.destination) {
+      throw new Error('Le transporteur ne fournit pas la provenance ou la destination. Vous pouvez les saisir manuellement.');
+    }
+    const [from, to] = await Promise.all([geocode(result.origin), geocode(result.destination)]);
+    const route = {
+      origin: { name: placeName(from), latitude: from.latitude, longitude: from.longitude },
+      destination: { name: placeName(to), latitude: to.latitude, longitude: to.longitude }
+    };
+    shipments = shipments.map(item => item.number === trackingNumber ? { ...item, route } : item);
+    if (!saveShipments()) return;
+    renderShipments();
+    if (selectedTracking === trackingNumber) {
+      showParcelGlobePoints([
+        { ...route.origin, label: `Provenance : ${route.origin.name}` },
+        { ...route.destination, label: `Destination : ${route.destination.name}` }
+      ]);
+      parcelRouteResult.textContent = `${route.origin.name} → ${route.destination.name} · trajet indicatif`;
+      parcelRouteResult.classList.remove('is-error');
+    }
+  } catch (error) {
+    if (selectedTracking === trackingNumber) {
+      parcelRouteResult.textContent =
+        `${error.message || 'Trajet automatique indisponible.'} Saisie manuelle disponible ci-dessous.`;
+      parcelRouteResult.classList.add('is-error');
+    }
+  } finally {
+    routeRequests.delete(trackingNumber);
+  }
+}
 
 parcelRouteForm.addEventListener('submit', async event => {
   event.preventDefault();
@@ -589,9 +772,16 @@ parcelRouteForm.addEventListener('submit', async event => {
   parcelRouteResult.textContent = 'Recherche du trajet…';
   try {
     const [from, to] = await Promise.all([geocode(origin), geocode(destination)]);
-    showPoints('parcel-map', [
-      { latitude: from.latitude, longitude: from.longitude, label: `Provenance : ${placeName(from)}` },
-      { latitude: to.latitude, longitude: to.longitude, label: `Destination : ${placeName(to)}` }
+    const route = {
+      origin: { name: placeName(from), latitude: from.latitude, longitude: from.longitude },
+      destination: { name: placeName(to), latitude: to.latitude, longitude: to.longitude }
+    };
+    shipments = shipments.map(item => item.number === selectedTracking ? { ...item, route } : item);
+    if (!saveShipments()) return;
+    renderShipments();
+    showParcelGlobePoints([
+      { ...route.origin, label: `Provenance : ${route.origin.name}` },
+      { ...route.destination, label: `Destination : ${route.destination.name}` }
     ]);
     parcelRouteResult.textContent = `${placeName(from)} → ${placeName(to)}`;
   } catch (error) {
@@ -700,3 +890,4 @@ window.setInterval(() => {
 
 renderShipments();
 updateWidget();
+updateSelectedParcelRoute();
