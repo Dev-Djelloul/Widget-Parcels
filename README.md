@@ -24,3 +24,5 @@ Les numéros de suivi et les préférences restent dans le stockage local du nav
 ## Déploiement
 
 Le script npm `deploy` compile les fichiers statiques et déploie le contenu de `dist/` sur le projet Cloudflare Pages configuré. Si vous utilisez un autre projet Pages, modifiez son nom dans `package.json`.
+
+Le workflow GitHub Actions `.github/workflows/deploy-pages.yml` déploie automatiquement chaque mise à jour de `main`. Pour l’activer, configurez dans les secrets Actions du dépôt `CLOUDFLARE_ACCOUNT_ID` et `CLOUDFLARE_API_TOKEN`. Le jeton doit disposer de l’autorisation de modification de Cloudflare Pages sur le compte concerné. Consultez le [guide Cloudflare pour les déploiements CI](https://developers.cloudflare.com/pages/how-to/use-direct-upload-with-continuous-integration/) pour créer ces identifiants.
