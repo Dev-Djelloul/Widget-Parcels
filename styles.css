@@ -166,12 +166,12 @@ h1 { font-size: clamp(30px, 3.1vw, 42px); letter-spacing: -1.8px; line-height: 1
 .live-badge { align-items: center; background: #edf6ee; border-radius: 20px; color: #4b8155; display: flex; font-size: 8px; font-weight: 700; gap: 5px; letter-spacing: .4px; padding: 6px 8px; }
 .live-badge span { background: #70b479; border-radius: 50%; height: 6px; width: 6px; }
 .tracking-panel .panel-heading h2 { font-size: 21px; font-weight: 800; letter-spacing: -.8px; }
-.tracking-layout { display: grid; gap: 18px; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); margin-top: 17px; }
+.tracking-layout { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); margin-top: 17px; }
 .tracking-info { min-width: 0; }
 .widget-frame { background: #fff; border: 1px solid var(--line); border-radius: 10px; margin-top: 17px; max-height: 62vh; min-height: 320px; overflow: auto; overscroll-behavior: contain; }
 .tracking-info .widget-frame { margin-top: 0; }
 .widget-frame iframe { border: 0; display: block; height: min(62vh, 620px); margin: 0 auto; max-width: 100%; min-height: 320px; min-width: 0; width: 100%; }
-.destination-weather, .parcel-route { background: var(--surface-soft); border: 1px solid var(--line); border-radius: 10px; margin-top: 13px; padding: 13px; }
+.destination-weather, .parcel-route { background: var(--surface-soft); border: 1px solid var(--line); border-radius: 10px; margin-top: 0; padding: 13px; }
 .destination-weather { margin: 0 0 18px; }
 .parcel-route-form { display: grid; gap: 7px; grid-template-columns: 1fr 1fr auto; }
 .parcel-route-form input { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; color: var(--text); font-size: 11px; min-height: 38px; min-width: 0; outline: none; padding: 0 10px; width: 100%; }
@@ -277,8 +277,6 @@ body.dark-theme .shipment-item.is-selected { background: #3b5340; }
   .weather-card { gap: 12px; grid-template-columns: 1fr; padding: 15px; }
   .weather-map-frame { grid-column: 1; grid-row: auto; min-height: 290px; }
   .weather-map-caption { grid-column: 1; grid-row: auto; }
-  .tracking-layout { grid-template-columns: 1fr; }
-  .parcel-route { margin-top: 0; }
   .footer { align-items: flex-start; flex-direction: column; gap: 7px; padding-top: 16px; }
 }
 @media (min-width: 761px) {
@@ -295,9 +293,6 @@ body.dark-theme .shipment-item.is-selected { background: #3b5340; }
 }
 @media (min-width: 1500px) {
   body.sidebar-collapsed .main-content { margin-left: auto; }
-}
-@media (min-width: 761px) and (max-width: 900px) {
-  .tracking-layout { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
   .weather-card { grid-template-columns: 1fr; }
