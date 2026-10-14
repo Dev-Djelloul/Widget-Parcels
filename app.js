@@ -12,12 +12,87 @@ const parcelTrackingLink = document.querySelector('#parcel-tracking-link');
 const weatherButton = document.querySelector('#weather-button');
 const weatherResult = document.querySelector('#weather-result');
 const weatherDescription = document.querySelector('#weather-description');
+const weatherMap = document.querySelector('#weather-map');
 const sidebarToggle = document.querySelector('#sidebar-toggle');
 const installButton = document.querySelector('#install-button');
 const mobileMenuQuery = window.matchMedia('(max-width: 760px)');
 let installPrompt;
 let shipments = loadShipments();
 let selectedTracking = shipments[0]?.number ?? '';
+let weatherCoordinates;
+
+const worldClocks = [
+  { id: 'local-clock', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+  { id: 'utc-clock', timeZone: 'UTC' },
+  { id: 'tokyo-clock', timeZone: 'Asia/Tokyo' },
+  { id: 'new-york-clock', timeZone: 'America/New_York' }
+];
+document.querySelector('#local-timezone').textContent =
+  (worldClocks[0].timeZone ?? 'UTC').replaceAll('_', ' ');
+function updateWorldClocks() {
+  const now = new Date();
+  for (const clock of worldClocks) {
+    document.getElementById(clock.id).textContent = new Intl.DateTimeFormat('fr-FR', {
+      timeZone: clock.timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    }).format(now);
+  }
+}
+updateWorldClocks();
+window.setInterval(updateWorldClocks, 1000);
+
+const liveNewsItems = document.querySelector('#live-news-items');
+function showNewsMessage(message, isError = false) {
+  const paragraph = document.createElement('p');
+  paragraph.className = 'live-news-message';
+  paragraph.textContent = message;
+  liveNewsItems.replaceChildren(paragraph);
+  if (isError) console.error(message);
+}
+
+async function refreshNews() {
+  try {
+    const endpoint = new URL('https://api.rss2json.com/v1/api.json');
+    endpoint.searchParams.set('rss_url', 'https://www.franceinfo.fr/titres.rss');
+    const response = await fetch(endpoint, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Actualités indisponibles (${response.status}).`);
+    const feed = await response.json();
+    if (feed.status !== 'ok' || !Array.isArray(feed.items)) {
+      throw new Error('Le flux des actualités est temporairement indisponible.');
+    }
+    const links = feed.items.slice(0, 3).map(article => {
+      const title = typeof article.title === 'string' ? article.title.trim() : '';
+      const href = typeof article.link === 'string' ? article.link.trim() : '';
+      if (!title || !href) return null;
+      let url;
+      try {
+        url = new URL(href);
+      } catch {
+        return null;
+      }
+      if (url.protocol !== 'https:') return null;
+      const link = document.createElement('a');
+      link.className = 'live-news-item';
+      link.href = url.toString();
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = title;
+      return link;
+    }).filter(Boolean);
+    if (links.length === 0) throw new Error('Aucun titre d’actualité disponible.');
+    liveNewsItems.replaceChildren(...links);
+  } catch (error) {
+    showNewsMessage(error.message || 'Impossible de charger les actualités.', true);
+  }
+}
+
+refreshNews();
+window.setInterval(() => {
+  if (!document.hidden) refreshNews();
+}, 600_000);
 
 function loadShipments() {
   try {
@@ -402,10 +477,10 @@ async function geocode(query) {
 }
 
 const mapMaps = {};
-function getMap(id) {
+function getMap(id, { center = [20, 0], zoom = 2 } = {}) {
   if (!window.L) return null;
   if (!mapMaps[id]) {
-    const map = L.map(id, { scrollWheelZoom: false }).setView([20, 0], 2);
+    const map = L.map(id, { scrollWheelZoom: false }).setView(center, zoom);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -433,6 +508,72 @@ function showPoints(id, points) {
 
 const placeName = location => [location.name, location.admin1, location.country]
   .filter((part, index, parts) => part && parts.indexOf(part) === index).join(', ');
+
+function setWeatherMapLocation(latitude, longitude) {
+  const endpoint = new URL('https://embed.windy.com/embed.html');
+  endpoint.search = new URLSearchParams({
+    type: 'map',
+    location: 'coordinates',
+    metricRain: 'default',
+    metricTemp: 'default',
+    metricWind: 'default',
+    zoom: '6',
+    overlay: 'rain',
+    product: 'ecmwf',
+    level: 'surface',
+    lat: String(latitude),
+    lon: String(longitude),
+    detailLat: String(latitude),
+    detailLon: String(longitude),
+    lang: 'fr'
+  }).toString();
+  weatherMap.src = endpoint.toString();
+}
+
+async function fetchCurrentWeather(latitude, longitude) {
+  const endpoint = new URL('https://api.open-meteo.com/v1/forecast');
+  endpoint.search = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    current: 'temperature_2m,apparent_temperature,weather_code',
+    temperature_unit: 'celsius',
+    timezone: 'auto'
+  }).toString();
+  const response = await fetch(endpoint);
+  if (!response.ok) throw new Error(`Météo indisponible (${response.status}).`);
+  const data = await response.json();
+  if (
+    typeof data.current?.temperature_2m !== 'number' ||
+    typeof data.current.weather_code !== 'number'
+  ) {
+    throw new Error('Les données météo reçues sont incomplètes.');
+  }
+  return data.current;
+}
+
+function formatWeather(current) {
+  const apparentTemperature = typeof current.apparent_temperature === 'number'
+    ? ` · ressenti ${Math.round(current.apparent_temperature)} °C`
+    : '';
+  const currentTime = typeof current.time === 'string'
+    ? ` · ${current.time.slice(-5)} heure locale`
+    : '';
+  return `${Math.round(current.temperature_2m)} °C · ` +
+    `${weatherLabels[current.weather_code] ?? 'Conditions actuelles'}` +
+    `${apparentTemperature}${currentTime}`;
+}
+
+async function refreshCurrentWeather() {
+  if (!weatherCoordinates) return;
+  try {
+    const current = await fetchCurrentWeather(weatherCoordinates.latitude, weatherCoordinates.longitude);
+    weatherResult.textContent = formatWeather(current);
+    weatherResult.classList.remove('is-error');
+  } catch (error) {
+    weatherResult.textContent = error.message || 'Impossible de mettre à jour la météo.';
+    weatherResult.classList.add('is-error');
+  }
+}
 
 const parcelRouteForm = document.querySelector('#parcel-route-form');
 const parcelRouteResult = document.querySelector('#parcel-route-result');
@@ -463,22 +604,22 @@ parcelRouteForm.addEventListener('submit', async event => {
 
 const destinationWeatherForm = document.querySelector('#destination-weather-form');
 const destinationLocationInput = document.querySelector('#destination-location');
-const destinationWeatherResult = document.querySelector('#destination-weather-result');
 
 destinationWeatherForm.addEventListener('submit', async event => {
   event.preventDefault();
   const query = destinationLocationInput.value.trim();
   if (query.length < 2) {
-    destinationWeatherResult.textContent = 'Saisissez au moins deux caractères.';
-    destinationWeatherResult.classList.add('is-error');
+    weatherResult.textContent = 'Saisissez au moins deux caractères.';
+    weatherResult.classList.add('is-error');
     return;
   }
 
   const submitButton = destinationWeatherForm.querySelector('button[type="submit"]');
   submitButton.disabled = true;
   submitButton.textContent = 'Recherche…';
-  destinationWeatherResult.classList.remove('is-error');
-  destinationWeatherResult.textContent = 'Recherche de la météo de destination…';
+  weatherResult.classList.remove('is-error');
+  weatherDescription.textContent = 'Recherche de la météo…';
+  weatherResult.textContent = '';
   try {
     const geocodingUrl = new URL('https://geocoding-api.open-meteo.com/v1/search');
     geocodingUrl.search = new URLSearchParams({
@@ -495,99 +636,67 @@ destinationWeatherForm.addEventListener('submit', async event => {
       throw new Error('Aucune ville ou aucun pays correspondant. Essayez « ville, pays ».');
     }
     const location = locations.find(result => result.feature_code === 'PCLI') ?? locations[0];
-    const forecastUrl = new URL('https://api.open-meteo.com/v1/forecast');
-    forecastUrl.search = new URLSearchParams({
-      latitude: String(location.latitude),
-      longitude: String(location.longitude),
-      current: 'temperature_2m,apparent_temperature,weather_code',
-      temperature_unit: 'celsius',
-      timezone: location.timezone || 'auto'
-    }).toString();
-    const forecastResponse = await fetch(forecastUrl);
-    if (!forecastResponse.ok) throw new Error(`Météo de destination indisponible (${forecastResponse.status}).`);
-    const forecast = await forecastResponse.json();
-    if (
-      typeof forecast.current?.temperature_2m !== 'number' ||
-      typeof forecast.current?.weather_code !== 'number'
-    ) {
-      throw new Error('Les données météo de cette destination sont incomplètes.');
-    }
+    const current = await fetchCurrentWeather(location.latitude, location.longitude);
     const isCountryCenter = location.feature_code === 'PCLI';
     const place = isCountryCenter
       ? `${location.name} (centre du pays, estimation)`
-      : [location.name, location.admin1, location.country]
-        .filter((part, index, parts) => part && parts.indexOf(part) === index)
-        .join(', ');
-    const apparentTemperature = typeof forecast.current.apparent_temperature === 'number'
-      ? ` · ressenti ${Math.round(forecast.current.apparent_temperature)} °C`
-      : '';
-    const currentTime = typeof forecast.current.time === 'string'
-      ? ` · ${forecast.current.time.slice(-5)} heure locale`
-      : '';
-    destinationWeatherResult.textContent =
-      `${place} : ${Math.round(forecast.current.temperature_2m)} °C, ` +
-      `${weatherLabels[forecast.current.weather_code] ?? 'conditions actuelles'}` +
-      `${apparentTemperature}${currentTime}.`;
-    showPoints('weather-map', [{
-      latitude: location.latitude,
-      longitude: location.longitude,
-      label: place,
-      zoom: isCountryCenter ? 5 : 9
-    }]);
+      : placeName(location);
+    weatherResult.textContent = formatWeather(current);
+    weatherResult.classList.remove('is-error');
+    weatherDescription.textContent = place;
+    weatherCoordinates = { latitude: location.latitude, longitude: location.longitude };
+    setWeatherMapLocation(location.latitude, location.longitude);
   } catch (error) {
-    destinationWeatherResult.textContent = error.message || 'Impossible de récupérer la météo de destination.';
-    destinationWeatherResult.classList.add('is-error');
+    weatherDescription.textContent = 'La météo de ce lieu n’a pas pu être chargée.';
+    weatherResult.textContent = error.message || 'Impossible de récupérer la météo.';
+    weatherResult.classList.add('is-error');
   } finally {
     submitButton.disabled = false;
-    submitButton.innerHTML = 'Voir la météo <span aria-hidden="true">→</span>';
+    submitButton.textContent = 'Rechercher';
   }
 });
 
 weatherButton.addEventListener('click', () => {
   if (!navigator.geolocation) {
     weatherDescription.textContent = 'La géolocalisation n’est pas disponible dans ce navigateur.';
+    weatherResult.textContent = 'Essayez plutôt une recherche par ville.';
     return;
   }
+  weatherResult.classList.remove('is-error');
   weatherButton.disabled = true;
   weatherButton.textContent = 'Localisation…';
   weatherDescription.textContent = 'Recherche de la météo près de vous…';
+  weatherResult.textContent = '';
   navigator.geolocation.getCurrentPosition(async position => {
     try {
       const { latitude, longitude } = position.coords;
-      const endpoint = new URL('https://api.open-meteo.com/v1/forecast');
-      endpoint.search = new URLSearchParams({
-        latitude: String(latitude),
-        longitude: String(longitude),
-        current: 'temperature_2m,apparent_temperature,weather_code',
-        temperature_unit: 'celsius',
-        timezone: 'auto'
-      }).toString();
-      const response = await fetch(endpoint);
-      if (!response.ok) throw new Error(`Météo indisponible (${response.status}).`);
-      const data = await response.json();
-      const current = data.current;
-      if (!current || typeof current.temperature_2m !== 'number') {
-        throw new Error('Les données météo reçues sont incomplètes.');
-      }
-      weatherResult.textContent = `${Math.round(current.temperature_2m)}°C · ${weatherLabels[current.weather_code] ?? 'Conditions actuelles'}`;
-      weatherDescription.textContent = `Ressenti ${Math.round(current.apparent_temperature)}°C · météo actuelle près de vous`;
-      weatherButton.textContent = 'Actualiser ↻';
+      weatherCoordinates = { latitude, longitude };
+      setWeatherMapLocation(latitude, longitude);
+      const current = await fetchCurrentWeather(latitude, longitude);
+      weatherResult.textContent = formatWeather(current);
+      weatherDescription.textContent = 'Météo actuelle près de vous';
     } catch (error) {
       weatherDescription.textContent = error.message || 'Impossible de récupérer la météo pour le moment.';
-      weatherResult.textContent = '';
-      weatherButton.textContent = 'Réessayer →';
+      weatherResult.textContent = 'Essayez une recherche par ville.';
+      weatherResult.classList.add('is-error');
     } finally {
       weatherButton.disabled = false;
+      weatherButton.innerHTML = 'Utiliser ma position <span aria-hidden="true">→</span>';
     }
   }, error => {
     const message = error.code === error.PERMISSION_DENIED
       ? 'Autorisez la localisation pour afficher la météo près de vous.'
       : 'Votre position est indisponible. Vérifiez les réglages de localisation.';
     weatherDescription.textContent = message;
-    weatherButton.textContent = 'Réessayer →';
+    weatherResult.textContent = 'Vous pouvez aussi rechercher une ville.';
     weatherButton.disabled = false;
+    weatherButton.innerHTML = 'Utiliser ma position <span aria-hidden="true">→</span>';
   }, { timeout: 10000, maximumAge: 300000 });
 });
+
+window.setInterval(() => {
+  if (!document.hidden) refreshCurrentWeather();
+}, 600_000);
 
 renderShipments();
 updateWidget();

@@ -1,6 +1,6 @@
 # Widget Parcels
 
-Widget Parcels est un tableau de bord bilingue de suivi de colis. Il enregistre les numéros de suivi et les préférences dans le navigateur, intègre le widget de suivi Parcel App et permet de consulter la météo actuelle d’une ville ou d’un pays choisi manuellement. Pour une recherche portant uniquement sur un pays, la météo est calculée à partir d’un point central approximatif. La carte peut afficher une provenance et une destination saisies manuellement ; le trajet est indicatif et ne représente pas la position réelle du colis.
+Widget Parcels est un tableau de bord bilingue de suivi de colis. Il enregistre les numéros de suivi et les préférences dans le navigateur, affiche les heures de plusieurs fuseaux horaires et des actualités françaises, intègre le widget de suivi Parcel App et propose une carte météo Windy avec les conditions actuelles d’une ville ou d’un pays choisi manuellement. Pour une recherche portant uniquement sur un pays, la météo est calculée à partir d’un point central approximatif. La carte du colis peut afficher une provenance et une destination saisies manuellement ; le trajet est indicatif et ne représente pas la position réelle du colis.
 
 ## Lancer l’application en local
 
@@ -17,10 +17,12 @@ Servez le répertoire du projet ou le répertoire généré `dist/` avec n’imp
 
 - Suivi des colis : [Parcel App](https://parcelsapp.com/)
 - Géocodage et météo : [Open-Meteo](https://open-meteo.com/)
-- Cartes : [Leaflet](https://leafletjs.com/) et [OpenStreetMap](https://www.openstreetmap.org/)
+- Carte météo et prévisions ECMWF : intégration [Windy](https://www.windy.com/)
+- Carte indicative du trajet : [Leaflet](https://leafletjs.com/) et [OpenStreetMap](https://www.openstreetmap.org/)
+- Actualités françaises : flux RSS de [franceinfo](https://www.franceinfo.fr/titres.rss), converti par [RSS2JSON](https://rss2json.com/)
 
-Les numéros de suivi et les préférences restent dans le stockage local du navigateur. La consultation de la météo, le géocodage, les tuiles de carte et le suivi des colis nécessitent une connexion Internet.
+Les numéros de suivi et les préférences restent dans le stockage local du navigateur. La météo locale, la carte météo, les actualités, le géocodage, les tuiles de carte et le suivi des colis nécessitent une connexion Internet. La position n’est demandée qu’après action sur le bouton météo et n’est pas transmise au service d’actualités.
 
 ## Déploiement
 
-Le script npm `deploy` compile les fichiers statiques et déploie le contenu de `dist/` sur le projet Cloudflare Pages configuré. Si vous utilisez un autre projet Pages, modifiez son nom dans `package.json`.
+Le déploiement est manuel pour le moment. Après vous être authentifié avec Wrangler (`npx wrangler login`), lancez `npm run deploy` pour compiler l’application et publier le contenu de `dist/` sur le projet Cloudflare Pages configuré. Si vous utilisez un autre projet Pages, modifiez son nom dans `package.json`.
