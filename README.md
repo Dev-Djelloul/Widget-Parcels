@@ -1,6 +1,6 @@
 # Widget Parcels
 
-Widget Parcels est un tableau de bord bilingue de suivi de colis. Il enregistre les numéros de suivi et les préférences dans le navigateur, intègre le widget de suivi Parcel App et permet de consulter la météo actuelle d’une ville ou d’un pays choisi manuellement. Pour une recherche portant uniquement sur un pays, la météo est calculée à partir d’un point central approximatif. La carte peut afficher une provenance et une destination saisies manuellement ; le trajet est indicatif et ne représente pas la position réelle du colis.
+Widget Parcels est un tableau de bord bilingue de suivi de colis. Il enregistre les numéros de suivi et les préférences dans le navigateur, affiche les heures locales de plusieurs fuseaux horaires, intègre le widget de suivi Parcel App et permet de consulter la météo actuelle d’une ville ou d’un pays choisi manuellement. Pour une recherche portant uniquement sur un pays, la météo est calculée à partir d’un point central approximatif. La carte peut afficher une provenance et une destination saisies manuellement ; le trajet est indicatif et ne représente pas la position réelle du colis.
 
 ## Lancer l’application en local
 

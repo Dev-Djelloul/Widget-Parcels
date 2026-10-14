@@ -52,30 +52,6 @@
           </div>
         </header>
 
-        <section class="weather-card" id="meteo" aria-labelledby="weather-title">
-          <div class="weather-visual" aria-hidden="true"><span class="weather-sun"></span><span class="weather-cloud"></span></div>
-          <div class="weather-copy"><p class="eyebrow">UN ŒIL SUR LE CIEL</p><h2 id="weather-title">La météo, sur votre trajet ?</h2><p id="weather-description">Affichez la météo près de vous avant de partir récupérer un colis.</p></div>
-          <div class="weather-result" id="weather-result" aria-live="polite"></div>
-          <button class="weather-button" id="weather-button" type="button">Voir ma météo <span aria-hidden="true">→</span></button>
-        </section>
-
-        <section class="destination-weather" aria-labelledby="destination-weather-title">
-          <div class="destination-weather-heading">
-            <span class="destination-weather-icon" aria-hidden="true">☼</span>
-            <div>
-              <h3 id="destination-weather-title">Météo d’une ville ou d’un pays</h3>
-              <p>Choisissez une ville ou un pays pour consulter sa météo actuelle (pour un pays seul, au centre approximatif).</p>
-            </div>
-          </div>
-          <form class="destination-weather-form" id="destination-weather-form">
-            <label class="visually-hidden" for="destination-location">Ville ou pays de destination</label>
-            <input id="destination-location" name="destination" type="search" autocomplete="off" maxlength="100" placeholder="Ex. Paris, France ou Japon" required>
-            <button type="submit">Voir la météo <span aria-hidden="true">→</span></button>
-          </form>
-          <output class="destination-weather-result" id="destination-weather-result" aria-live="polite"></output>
-          <div class="map-frame" id="weather-map" role="img" aria-label="Carte du lieu choisi" hidden></div>
-        </section>
-
         <section class="welcome">
           <div>
             <p class="eyebrow"><span class="eyebrow-dot"></span>TOUT VOTRE SUIVI, AU MÊME ENDROIT</p>
@@ -86,6 +62,37 @@
             <span class="art-sun"></span><span class="art-cloud cloud-one"></span><span class="art-cloud cloud-two"></span>
             <span class="art-box"><span></span></span><span class="art-spark spark-one">✳</span><span class="art-spark spark-two">✳</span>
           </div>
+        </section>
+
+        <section class="world-clock" aria-label="Horloges mondiales">
+          <div class="world-clock-heading">
+            <span class="clock-icon" aria-hidden="true">◷</span>
+            <div><p class="eyebrow">HEURE MONDIALE</p><h2>Le monde en temps réel</h2></div>
+          </div>
+          <div class="clock-list">
+            <div class="clock-item"><span>Votre heure locale</span><time id="local-clock">--:--:--</time><small id="local-timezone">Fuseau de l’appareil</small></div>
+            <div class="clock-item"><span>Temps universel</span><time id="utc-clock">--:--:--</time><small>UTC</small></div>
+            <div class="clock-item"><span>Tokyo</span><time id="tokyo-clock">--:--:--</time><small>Japon</small></div>
+            <div class="clock-item"><span>New York</span><time id="new-york-clock">--:--:--</time><small>États-Unis</small></div>
+          </div>
+        </section>
+
+        <section class="weather-card" id="meteo" aria-labelledby="weather-title">
+          <div class="weather-details">
+            <div class="weather-heading">
+              <span class="weather-icon" aria-hidden="true">☼</span>
+              <div><p class="eyebrow">MÉTÉO EN DIRECT</p><h2 id="weather-title">La météo, où que vous soyez</h2></div>
+            </div>
+            <p class="weather-description" id="weather-description">Recherchez une ville ou affichez la météo près de vous.</p>
+            <output class="weather-result" id="weather-result" aria-live="polite">La météo du lieu sélectionné s’affichera ici.</output>
+            <form class="destination-weather-form" id="destination-weather-form">
+              <label class="visually-hidden" for="destination-location">Ville ou pays</label>
+              <input id="destination-location" name="destination" type="search" autocomplete="off" maxlength="100" placeholder="Ex. Paris, France ou Japon" required>
+              <button type="submit">Rechercher</button>
+            </form>
+            <button class="weather-button" id="weather-button" type="button">Utiliser ma position <span aria-hidden="true">→</span></button>
+          </div>
+          <div class="weather-map map-frame" id="weather-map" role="img" aria-label="Carte météo du lieu sélectionné"></div>
         </section>
 
         <section class="add-card" aria-labelledby="add-title">
@@ -99,35 +106,39 @@
           <output class="form-message" id="form-message" aria-live="polite"></output>
         </section>
 
-        <div class="content-grid">
-          <section class="panel shipments-panel" id="mes-colis" aria-labelledby="shipments-title">
-            <div class="panel-heading">
-              <div><p class="eyebrow">VOTRE PETIT CARNET</p><h2 id="shipments-title">Mes colis <span class="count-badge" id="shipment-count">0</span></h2></div>
-              <span class="heading-decoration" aria-hidden="true">✳</span>
-            </div>
-            <div class="shipment-list" id="shipment-list"></div>
-            <div class="empty-state" id="empty-state">
-              <span class="empty-illustration" aria-hidden="true">✉</span>
-              <h3>La boîte est encore vide</h3>
-              <p>Ajoutez un numéro de suivi ci-dessus pour commencer. Vos colis seront conservés ici sur cet appareil.</p>
-            </div>
-            <p class="panel-footnote"><span aria-hidden="true">⌑</span> Vos numéros de suivi restent enregistrés dans votre navigateur.</p>
-          </section>
+        <section class="panel shipments-panel" id="mes-colis" aria-labelledby="shipments-title">
+          <div class="panel-heading">
+            <div><p class="eyebrow">VOTRE PETIT CARNET</p><h2 id="shipments-title">Mes colis <span class="count-badge" id="shipment-count">0</span></h2></div>
+            <span class="heading-decoration" aria-hidden="true">✳</span>
+          </div>
+          <div class="shipment-list" id="shipment-list"></div>
+          <div class="empty-state" id="empty-state">
+            <span class="empty-illustration" aria-hidden="true">✉</span>
+            <h3>La boîte est encore vide</h3>
+            <p>Ajoutez un numéro de suivi ci-dessus pour commencer. Vos colis seront conservés ici sur cet appareil.</p>
+          </div>
+          <p class="panel-footnote"><span aria-hidden="true">⌑</span> Vos numéros de suivi restent enregistrés dans votre navigateur.</p>
+        </section>
 
-          <section class="panel tracking-panel" id="suivi" aria-labelledby="tracking-title">
-            <div class="panel-heading tracking-heading">
-              <div><p class="eyebrow">PROPULSÉ PAR PARCEL APP</p><h2 id="tracking-title">Suivi en direct</h2></div>
-              <span class="live-badge"><span></span> EN DIRECT</span>
-            </div>
+        <section class="panel tracking-panel" id="suivi" aria-labelledby="tracking-title">
+          <div class="panel-heading tracking-heading">
+            <div><p class="eyebrow">PROPULSÉ PAR PARCEL APP</p><h2 id="tracking-title">Suivi en direct</h2></div>
+            <span class="live-badge"><span></span> EN DIRECT</span>
+          </div>
+          <div class="tracking-layout">
+            <div class="tracking-info">
             <div class="widget-frame">
               <iframe id="parcels-widget" title="Widget de suivi de colis Parcel App" src="https://parcelsapp.com/widget?textButton=Suivre%20le%20colis&amp;placeholder=Entrez%20votre%20num%C3%A9ro%20de%20suivi&amp;backgroundColorButton=%232f6b55&amp;colorButton=%23ffffff&amp;borderRadiusButton=10px&amp;borderRadiusInput=10px&amp;widgetWrapBorder=0&amp;widgetWrapBorderRadius=12px" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write"></iframe>
+            </div>
+            <p class="widget-caption">Le widget affiche les étapes disponibles. Si le colis n’a pas encore de premier scan, ouvrez sa fiche complète pour voir l’état indiqué par Parcel App.</p>
+            <a class="external-link" id="parcel-tracking-link" href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">Ouvrir la fiche Parcel App <span aria-hidden="true">↗</span></a>
             </div>
             <section class="parcel-route" aria-labelledby="parcel-route-title">
               <div class="destination-weather-heading">
                 <span class="destination-weather-icon" aria-hidden="true">⌖</span>
                 <div>
                   <h3 id="parcel-route-title">Carte du colis</h3>
-                  <p>Indiquez la provenance et la destination du colis pour visualiser son trajet. Ce n’est pas une position en temps réel.</p>
+                  <p>Visualisez le trajet indicatif entre la provenance et la destination renseignées.</p>
                 </div>
               </div>
               <form class="parcel-route-form" id="parcel-route-form">
@@ -140,10 +151,8 @@
               <output class="destination-weather-result" id="parcel-route-result" aria-live="polite"></output>
               <div class="map-frame" id="parcel-map" role="img" aria-label="Carte de provenance et destination du colis"></div>
             </section>
-            <p class="widget-caption">Le widget affiche les étapes disponibles. Si le colis n’a pas encore de premier scan, ouvrez sa fiche complète pour voir l’état indiqué par Parcel App.</p>
-            <a class="external-link" id="parcel-tracking-link" href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">Ouvrir la fiche Parcel App <span aria-hidden="true">↗</span></a>
-          </section>
-        </div>
+          </div>
+        </section>
 
         <footer class="footer"><span>Fait avec soin, pour les jours de livraison <span class="footer-heart">♥</span></span><span>Suivi fourni par <a href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">parcelsapp.com</a></span></footer>
       </main>

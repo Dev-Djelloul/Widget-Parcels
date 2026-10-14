@@ -19,6 +19,29 @@ let installPrompt;
 let shipments = loadShipments();
 let selectedTracking = shipments[0]?.number ?? '';
 
+const worldClocks = [
+  { id: 'local-clock', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+  { id: 'utc-clock', timeZone: 'UTC' },
+  { id: 'tokyo-clock', timeZone: 'Asia/Tokyo' },
+  { id: 'new-york-clock', timeZone: 'America/New_York' }
+];
+document.querySelector('#local-timezone').textContent =
+  (worldClocks[0].timeZone ?? 'UTC').replaceAll('_', ' ');
+function updateWorldClocks() {
+  const now = new Date();
+  for (const clock of worldClocks) {
+    document.getElementById(clock.id).textContent = new Intl.DateTimeFormat('fr-FR', {
+      timeZone: clock.timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    }).format(now);
+  }
+}
+updateWorldClocks();
+window.setInterval(updateWorldClocks, 1000);
+
 function loadShipments() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
@@ -434,6 +457,8 @@ function showPoints(id, points) {
 const placeName = location => [location.name, location.admin1, location.country]
   .filter((part, index, parts) => part && parts.indexOf(part) === index).join(', ');
 
+getMap('weather-map');
+
 const parcelRouteForm = document.querySelector('#parcel-route-form');
 const parcelRouteResult = document.querySelector('#parcel-route-result');
 getMap('parcel-map');
@@ -463,22 +488,22 @@ parcelRouteForm.addEventListener('submit', async event => {
 
 const destinationWeatherForm = document.querySelector('#destination-weather-form');
 const destinationLocationInput = document.querySelector('#destination-location');
-const destinationWeatherResult = document.querySelector('#destination-weather-result');
 
 destinationWeatherForm.addEventListener('submit', async event => {
   event.preventDefault();
   const query = destinationLocationInput.value.trim();
   if (query.length < 2) {
-    destinationWeatherResult.textContent = 'Saisissez au moins deux caractères.';
-    destinationWeatherResult.classList.add('is-error');
+    weatherResult.textContent = 'Saisissez au moins deux caractères.';
+    weatherResult.classList.add('is-error');
     return;
   }
 
   const submitButton = destinationWeatherForm.querySelector('button[type="submit"]');
   submitButton.disabled = true;
   submitButton.textContent = 'Recherche…';
-  destinationWeatherResult.classList.remove('is-error');
-  destinationWeatherResult.textContent = 'Recherche de la météo de destination…';
+  weatherResult.classList.remove('is-error');
+  weatherDescription.textContent = 'Recherche de la météo…';
+  weatherResult.textContent = '';
   try {
     const geocodingUrl = new URL('https://geocoding-api.open-meteo.com/v1/search');
     geocodingUrl.search = new URLSearchParams({
@@ -524,10 +549,11 @@ destinationWeatherForm.addEventListener('submit', async event => {
     const currentTime = typeof forecast.current.time === 'string'
       ? ` · ${forecast.current.time.slice(-5)} heure locale`
       : '';
-    destinationWeatherResult.textContent =
-      `${place} : ${Math.round(forecast.current.temperature_2m)} °C, ` +
+    weatherResult.textContent =
+      `${Math.round(forecast.current.temperature_2m)} °C · ` +
       `${weatherLabels[forecast.current.weather_code] ?? 'conditions actuelles'}` +
-      `${apparentTemperature}${currentTime}.`;
+      `${apparentTemperature}${currentTime}`;
+    weatherDescription.textContent = place;
     showPoints('weather-map', [{
       latitude: location.latitude,
       longitude: location.longitude,
@@ -535,22 +561,26 @@ destinationWeatherForm.addEventListener('submit', async event => {
       zoom: isCountryCenter ? 5 : 9
     }]);
   } catch (error) {
-    destinationWeatherResult.textContent = error.message || 'Impossible de récupérer la météo de destination.';
-    destinationWeatherResult.classList.add('is-error');
+    weatherDescription.textContent = 'La météo de ce lieu n’a pas pu être chargée.';
+    weatherResult.textContent = error.message || 'Impossible de récupérer la météo.';
+    weatherResult.classList.add('is-error');
   } finally {
     submitButton.disabled = false;
-    submitButton.innerHTML = 'Voir la météo <span aria-hidden="true">→</span>';
+    submitButton.textContent = 'Rechercher';
   }
 });
 
 weatherButton.addEventListener('click', () => {
   if (!navigator.geolocation) {
     weatherDescription.textContent = 'La géolocalisation n’est pas disponible dans ce navigateur.';
+    weatherResult.textContent = 'Essayez plutôt une recherche par ville.';
     return;
   }
+  weatherResult.classList.remove('is-error');
   weatherButton.disabled = true;
   weatherButton.textContent = 'Localisation…';
   weatherDescription.textContent = 'Recherche de la météo près de vous…';
+  weatherResult.textContent = '';
   navigator.geolocation.getCurrentPosition(async position => {
     try {
       const { latitude, longitude } = position.coords;
@@ -569,23 +599,32 @@ weatherButton.addEventListener('click', () => {
       if (!current || typeof current.temperature_2m !== 'number') {
         throw new Error('Les données météo reçues sont incomplètes.');
       }
-      weatherResult.textContent = `${Math.round(current.temperature_2m)}°C · ${weatherLabels[current.weather_code] ?? 'Conditions actuelles'}`;
-      weatherDescription.textContent = `Ressenti ${Math.round(current.apparent_temperature)}°C · météo actuelle près de vous`;
-      weatherButton.textContent = 'Actualiser ↻';
+      weatherResult.textContent = `${Math.round(current.temperature_2m)} °C · ${weatherLabels[current.weather_code] ?? 'Conditions actuelles'}`;
+      weatherDescription.textContent = typeof current.apparent_temperature === 'number'
+        ? `Près de vous · ressenti ${Math.round(current.apparent_temperature)} °C`
+        : 'Météo actuelle près de vous';
+      showPoints('weather-map', [{
+        latitude,
+        longitude,
+        label: 'Météo près de vous',
+        zoom: 9
+      }]);
     } catch (error) {
       weatherDescription.textContent = error.message || 'Impossible de récupérer la météo pour le moment.';
-      weatherResult.textContent = '';
-      weatherButton.textContent = 'Réessayer →';
+      weatherResult.textContent = 'Essayez une recherche par ville.';
+      weatherResult.classList.add('is-error');
     } finally {
       weatherButton.disabled = false;
+      weatherButton.innerHTML = 'Utiliser ma position <span aria-hidden="true">→</span>';
     }
   }, error => {
     const message = error.code === error.PERMISSION_DENIED
       ? 'Autorisez la localisation pour afficher la météo près de vous.'
       : 'Votre position est indisponible. Vérifiez les réglages de localisation.';
     weatherDescription.textContent = message;
-    weatherButton.textContent = 'Réessayer →';
+    weatherResult.textContent = 'Vous pouvez aussi rechercher une ville.';
     weatherButton.disabled = false;
+    weatherButton.innerHTML = 'Utiliser ma position <span aria-hidden="true">→</span>';
   }, { timeout: 10000, maximumAge: 300000 });
 });
 
