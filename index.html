@@ -14,6 +14,8 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="preconnect" href="https://parcelsapp.com">
     <link rel="preconnect" href="https://tile.openstreetmap.org">
+    <link rel="preconnect" href="https://api.rainviewer.com">
+    <link rel="preconnect" href="https://tilecache.rainviewer.com">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -52,28 +54,45 @@
           </div>
         </header>
 
-        <section class="weather-card" id="meteo" aria-labelledby="weather-title">
-          <div class="weather-visual" aria-hidden="true"><span class="weather-sun"></span><span class="weather-cloud"></span></div>
-          <div class="weather-copy"><p class="eyebrow">UN ŒIL SUR LE CIEL</p><h2 id="weather-title">La météo, sur votre trajet ?</h2><p id="weather-description">Affichez la météo près de vous avant de partir récupérer un colis.</p></div>
-          <div class="weather-result" id="weather-result" aria-live="polite"></div>
-          <button class="weather-button" id="weather-button" type="button">Voir ma météo <span aria-hidden="true">→</span></button>
-        </section>
-
-        <section class="destination-weather" aria-labelledby="destination-weather-title">
-          <div class="destination-weather-heading">
-            <span class="destination-weather-icon" aria-hidden="true">☼</span>
-            <div>
-              <h3 id="destination-weather-title">Météo d’une ville ou d’un pays</h3>
-              <p>Choisissez une ville ou un pays pour consulter sa météo actuelle (pour un pays seul, au centre approximatif).</p>
+        <section class="live-info-bar" aria-label="Heures et actualités en direct">
+          <div class="live-clocks">
+            <div class="live-clock">
+              <span class="live-clock-label">Heure mondiale · UTC</span>
+              <time id="world-clock" aria-label="Heure mondiale UTC">--:--:--</time>
+            </div>
+            <div class="live-clock">
+              <span class="live-clock-label">Heure locale · <span id="local-timezone">fuseau de l’appareil</span></span>
+              <time id="local-clock" aria-label="Heure locale">--:--:--</time>
             </div>
           </div>
-          <form class="destination-weather-form" id="destination-weather-form">
-            <label class="visually-hidden" for="destination-location">Ville ou pays de destination</label>
-            <input id="destination-location" name="destination" type="search" autocomplete="off" maxlength="100" placeholder="Ex. Paris, France ou Japon" required>
-            <button type="submit">Voir la météo <span aria-hidden="true">→</span></button>
-          </form>
-          <output class="destination-weather-result" id="destination-weather-result" aria-live="polite"></output>
-          <div class="map-frame" id="weather-map" role="img" aria-label="Carte du lieu choisi" hidden></div>
+          <div class="live-news" aria-labelledby="live-news-title">
+            <h2 class="live-news-title" id="live-news-title"><span class="live-news-dot" aria-hidden="true"></span>À LA UNE</h2>
+            <div class="live-news-items" id="live-news-items" aria-live="polite">
+              <p class="live-news-message">Chargement des actualités…</p>
+            </div>
+            <p class="live-news-source">Flux Google Actualités · actualisation toutes les 5 minutes</p>
+          </div>
+        </section>
+
+        <section class="weather-card" id="meteo" aria-labelledby="weather-title">
+          <div class="weather-card-heading">
+            <div class="weather-visual" aria-hidden="true"><span class="weather-sun"></span><span class="weather-cloud"></span></div>
+            <div class="weather-copy">
+              <p class="eyebrow">UN ŒIL SUR LE CIEL</p>
+              <h2 id="weather-title">Radar météo en direct</h2>
+              <p id="weather-description">Radar des précipitations centré sur la France. Affichez la météo près de vous avec votre position.</p>
+            </div>
+          </div>
+          <div class="weather-current">
+            <output class="weather-result" id="weather-result" aria-live="polite">Météo locale non chargée.</output>
+            <button class="weather-button" id="weather-button" type="button">Voir ma météo <span aria-hidden="true">→</span></button>
+          </div>
+          <div class="weather-map-toolbar">
+            <output class="weather-radar-status" id="weather-radar-status" aria-live="off">Chargement du radar…</output>
+            <button class="radar-play-button" id="weather-radar-play" type="button" disabled>Lire le radar</button>
+          </div>
+          <div class="weather-map-frame" id="weather-map" role="img" aria-label="Carte interactive du radar météo des précipitations"></div>
+          <p class="weather-map-caption">Images radar des précipitations observées au cours des deux dernières heures.</p>
         </section>
 
         <section class="welcome">
@@ -123,8 +142,8 @@
               <iframe id="parcels-widget" title="Widget de suivi de colis Parcel App" src="https://parcelsapp.com/widget?textButton=Suivre%20le%20colis&amp;placeholder=Entrez%20votre%20num%C3%A9ro%20de%20suivi&amp;backgroundColorButton=%232f6b55&amp;colorButton=%23ffffff&amp;borderRadiusButton=10px&amp;borderRadiusInput=10px&amp;widgetWrapBorder=0&amp;widgetWrapBorderRadius=12px" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write"></iframe>
             </div>
             <section class="parcel-route" aria-labelledby="parcel-route-title">
-              <div class="destination-weather-heading">
-                <span class="destination-weather-icon" aria-hidden="true">⌖</span>
+              <div class="parcel-route-heading">
+                <span class="parcel-route-icon" aria-hidden="true">⌖</span>
                 <div>
                   <h3 id="parcel-route-title">Carte du colis</h3>
                   <p>Indiquez la provenance et la destination du colis pour visualiser son trajet. Ce n’est pas une position en temps réel.</p>
@@ -137,7 +156,7 @@
                 <input id="parcel-destination" type="search" autocomplete="off" maxlength="100" placeholder="Destination (ex. Lyon, France)" required>
                 <button type="submit">Afficher le trajet <span aria-hidden="true">→</span></button>
               </form>
-              <output class="destination-weather-result" id="parcel-route-result" aria-live="polite"></output>
+              <output class="parcel-route-result" id="parcel-route-result" aria-live="polite"></output>
               <div class="map-frame" id="parcel-map" role="img" aria-label="Carte de provenance et destination du colis"></div>
             </section>
             <p class="widget-caption">Le widget affiche les étapes disponibles. Si le colis n’a pas encore de premier scan, ouvrez sa fiche complète pour voir l’état indiqué par Parcel App.</p>

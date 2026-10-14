@@ -1,6 +1,6 @@
 # Widget Parcels
 
-Widget Parcels est un tableau de bord bilingue de suivi de colis. Il enregistre les numéros de suivi et les préférences dans le navigateur, intègre le widget de suivi Parcel App et permet de consulter la météo actuelle d’une ville ou d’un pays choisi manuellement. Pour une recherche portant uniquement sur un pays, la météo est calculée à partir d’un point central approximatif. La carte peut afficher une provenance et une destination saisies manuellement ; le trajet est indicatif et ne représente pas la position réelle du colis.
+Widget Parcels est un tableau de bord bilingue de suivi de colis. Il enregistre les numéros de suivi et les préférences dans le navigateur, intègre le widget Parcel App et affiche un radar météo avec les conditions locales, les heures UTC et locale ainsi que les dernières actualités françaises. La carte de suivi peut représenter une provenance et une destination saisies manuellement ; le trajet est indicatif et ne représente pas la position réelle du colis.
 
 ## Lancer l’application en local
 
@@ -18,8 +18,10 @@ Servez le répertoire du projet ou le répertoire généré `dist/` avec n’imp
 - Suivi des colis : [Parcel App](https://parcelsapp.com/)
 - Géocodage et météo : [Open-Meteo](https://open-meteo.com/)
 - Cartes : [Leaflet](https://leafletjs.com/) et [OpenStreetMap](https://www.openstreetmap.org/)
+- Radar de précipitations : [RainViewer](https://www.rainviewer.com/)
+- Actualités françaises : flux RSS de [Google Actualités](https://news.google.com/)
 
-Les numéros de suivi et les préférences restent dans le stockage local du navigateur. La consultation de la météo, le géocodage, les tuiles de carte et le suivi des colis nécessitent une connexion Internet.
+Les numéros de suivi et les préférences restent dans le stockage local du navigateur. La météo locale, le radar, les actualités, le géocodage, les tuiles de carte et le suivi des colis nécessitent une connexion Internet. La position n’est demandée qu’après action sur le bouton météo et n’est pas transmise au service d’actualités.
 
 ## Déploiement
 

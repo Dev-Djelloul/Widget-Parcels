@@ -12,6 +12,8 @@ const parcelTrackingLink = document.querySelector('#parcel-tracking-link');
 const weatherButton = document.querySelector('#weather-button');
 const weatherResult = document.querySelector('#weather-result');
 const weatherDescription = document.querySelector('#weather-description');
+const weatherRadarStatus = document.querySelector('#weather-radar-status');
+const weatherRadarPlayButton = document.querySelector('#weather-radar-play');
 const sidebarToggle = document.querySelector('#sidebar-toggle');
 const installButton = document.querySelector('#install-button');
 const mobileMenuQuery = window.matchMedia('(max-width: 760px)');
@@ -402,10 +404,10 @@ async function geocode(query) {
 }
 
 const mapMaps = {};
-function getMap(id) {
+function getMap(id, { center = [20, 0], zoom = 2 } = {}) {
   if (!window.L) return null;
   if (!mapMaps[id]) {
-    const map = L.map(id, { scrollWheelZoom: false }).setView([20, 0], 2);
+    const map = L.map(id, { scrollWheelZoom: false }).setView(center, zoom);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 18,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -434,6 +436,153 @@ function showPoints(id, points) {
 const placeName = location => [location.name, location.admin1, location.country]
   .filter((part, index, parts) => part && parts.indexOf(part) === index).join(', ');
 
+const weatherMapEntry = getMap('weather-map', { center: [46.6, 2.4], zoom: 5 });
+let weatherRadarLayer;
+let weatherRadarFrames = [];
+let weatherRadarFrameIndex = -1;
+let weatherRadarPlayback;
+let weatherCoordinates;
+let weatherLocationMarker;
+
+function showRadarFrame(index) {
+  const frame = weatherRadarFrames[index];
+  if (!frame || !weatherMapEntry) return;
+  weatherRadarFrameIndex = index;
+  const tileUrl = `${weatherRadarHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+  if (!weatherRadarLayer) {
+    weatherRadarLayer = L.tileLayer(tileUrl, {
+      maxZoom: 18,
+      maxNativeZoom: 7,
+      opacity: 0.68,
+      attribution: '&copy; <a href="https://www.rainviewer.com/">RainViewer</a>'
+    }).addTo(weatherMapEntry.map);
+  } else {
+    weatherRadarLayer.setUrl(tileUrl);
+  }
+  const time = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    .format(new Date(frame.time * 1000));
+  weatherRadarStatus.textContent = `Radar des précipitations · image de ${time}`;
+}
+
+let weatherRadarHost = '';
+async function refreshWeatherRadar() {
+  weatherRadarStatus.classList.remove('is-error');
+  if (weatherRadarFrames.length === 0) weatherRadarStatus.textContent = 'Chargement du radar…';
+  try {
+    const response = await fetch('https://api.rainviewer.com/public/weather-maps.json', { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Radar météo indisponible (${response.status}).`);
+    const metadata = await response.json();
+    const host = new URL(metadata.host);
+    if (host.protocol !== 'https:' || !host.hostname.endsWith('.rainviewer.com')) {
+      throw new Error('Adresse du radar météo invalide.');
+    }
+    if (!weatherMapEntry) throw new Error('La carte météo ne peut pas être affichée.');
+    const frames = metadata.radar?.past;
+    if (!Array.isArray(frames)) throw new Error('Les images du radar météo sont indisponibles.');
+    const validFrames = frames.filter(frame =>
+      Number.isFinite(frame.time) && typeof frame.path === 'string' && /^\/v2\/radar\/[\w-]+$/.test(frame.path)
+    );
+    if (validFrames.length === 0) throw new Error('Aucune image récente du radar météo.');
+    weatherRadarHost = host.origin;
+    weatherRadarFrames = validFrames;
+    weatherRadarPlayButton.disabled = false;
+    if (!weatherRadarPlayback) showRadarFrame(validFrames.length - 1);
+    if (weatherMapEntry) setTimeout(() => weatherMapEntry.map.invalidateSize(), 0);
+  } catch (error) {
+    weatherRadarStatus.textContent = error.message || 'Impossible de charger le radar météo.';
+    weatherRadarStatus.classList.add('is-error');
+  }
+}
+
+weatherRadarPlayButton.addEventListener('click', () => {
+  if (weatherRadarPlayback) {
+    clearInterval(weatherRadarPlayback);
+    weatherRadarPlayback = undefined;
+    weatherRadarPlayButton.textContent = 'Lire le radar';
+    showRadarFrame(weatherRadarFrames.length - 1);
+    return;
+  }
+  if (weatherRadarFrames.length === 0) return;
+  weatherRadarPlayButton.textContent = 'Mettre en pause';
+  let index = 0;
+  showRadarFrame(index);
+  weatherRadarPlayback = setInterval(() => {
+    index = (index + 1) % weatherRadarFrames.length;
+    showRadarFrame(index);
+  }, 700);
+});
+
+refreshWeatherRadar();
+setInterval(() => {
+  if (!document.hidden) refreshWeatherRadar();
+}, 600_000);
+
+const worldClock = document.querySelector('#world-clock');
+const localClock = document.querySelector('#local-clock');
+const localTimezone = document.querySelector('#local-timezone');
+const localTimezoneName = new Intl.DateTimeFormat().resolvedOptions().timeZone || 'fuseau de l’appareil';
+localTimezone.textContent = localTimezoneName.replaceAll('_', ' ');
+
+function updateClocks() {
+  const now = new Date();
+  const options = { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' };
+  worldClock.textContent = new Intl.DateTimeFormat('fr-FR', { ...options, timeZone: 'UTC' }).format(now);
+  localClock.textContent = new Intl.DateTimeFormat('fr-FR', options).format(now);
+  worldClock.dateTime = now.toISOString();
+  localClock.dateTime = now.toISOString();
+}
+
+updateClocks();
+setInterval(updateClocks, 1000);
+
+const liveNewsItems = document.querySelector('#live-news-items');
+
+function showNewsMessage(message, isError = false) {
+  const paragraph = document.createElement('p');
+  paragraph.className = 'live-news-message';
+  paragraph.textContent = message;
+  liveNewsItems.replaceChildren(paragraph);
+  if (isError) console.error(message);
+}
+
+async function refreshNews() {
+  try {
+    const response = await fetch('/api/news', { headers: { Accept: 'application/rss+xml' }, cache: 'no-store' });
+    if (!response.ok) throw new Error(`Actualités indisponibles (${response.status}).`);
+    const xml = new DOMParser().parseFromString(await response.text(), 'application/xml');
+    if (xml.querySelector('parsererror')) throw new Error('Flux d’actualités invalide.');
+    const articles = [...xml.querySelectorAll('channel > item')].slice(0, 3);
+    const links = articles.map(article => {
+      const title = article.querySelector('title')?.textContent?.trim();
+      const href = article.querySelector('link')?.textContent?.trim();
+      if (!title || !href) return null;
+      let url;
+      try {
+        url = new URL(href);
+      } catch {
+        return null;
+      }
+      if (url.protocol !== 'https:') return null;
+      const link = document.createElement('a');
+      link.className = 'live-news-item';
+      link.href = url.toString();
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = title;
+      return link;
+    }).filter(Boolean);
+    if (links.length === 0) throw new Error('Aucun titre d’actualité disponible.');
+    liveNewsItems.replaceChildren(...links);
+  } catch (error) {
+    showNewsMessage(error.message || 'Impossible de charger les actualités.', true);
+  }
+}
+
+refreshNews();
+setInterval(() => {
+  if (!document.hidden) refreshNews();
+}, 300_000);
+
 const parcelRouteForm = document.querySelector('#parcel-route-form');
 const parcelRouteResult = document.querySelector('#parcel-route-result');
 getMap('parcel-map');
@@ -461,120 +610,58 @@ parcelRouteForm.addEventListener('submit', async event => {
   }
 });
 
-const destinationWeatherForm = document.querySelector('#destination-weather-form');
-const destinationLocationInput = document.querySelector('#destination-location');
-const destinationWeatherResult = document.querySelector('#destination-weather-result');
-
-destinationWeatherForm.addEventListener('submit', async event => {
-  event.preventDefault();
-  const query = destinationLocationInput.value.trim();
-  if (query.length < 2) {
-    destinationWeatherResult.textContent = 'Saisissez au moins deux caractères.';
-    destinationWeatherResult.classList.add('is-error');
-    return;
+async function loadCurrentWeather(latitude, longitude) {
+  const endpoint = new URL('https://api.open-meteo.com/v1/forecast');
+  endpoint.search = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    current: 'temperature_2m,apparent_temperature,weather_code',
+    temperature_unit: 'celsius',
+    timezone: 'auto'
+  }).toString();
+  const response = await fetch(endpoint);
+  if (!response.ok) throw new Error(`Météo indisponible (${response.status}).`);
+  const data = await response.json();
+  const current = data.current;
+  if (!current || typeof current.temperature_2m !== 'number' || typeof current.weather_code !== 'number') {
+    throw new Error('Les données météo reçues sont incomplètes.');
   }
-
-  const submitButton = destinationWeatherForm.querySelector('button[type="submit"]');
-  submitButton.disabled = true;
-  submitButton.textContent = 'Recherche…';
-  destinationWeatherResult.classList.remove('is-error');
-  destinationWeatherResult.textContent = 'Recherche de la météo de destination…';
-  try {
-    const geocodingUrl = new URL('https://geocoding-api.open-meteo.com/v1/search');
-    geocodingUrl.search = new URLSearchParams({
-      name: query,
-      count: '10',
-      language: 'fr',
-      format: 'json'
-    }).toString();
-    const geocodingResponse = await fetch(geocodingUrl);
-    if (!geocodingResponse.ok) throw new Error(`Recherche de destination indisponible (${geocodingResponse.status}).`);
-    const geocoding = await geocodingResponse.json();
-    const locations = geocoding.results;
-    if (!Array.isArray(locations) || locations.length === 0) {
-      throw new Error('Aucune ville ou aucun pays correspondant. Essayez « ville, pays ».');
-    }
-    const location = locations.find(result => result.feature_code === 'PCLI') ?? locations[0];
-    const forecastUrl = new URL('https://api.open-meteo.com/v1/forecast');
-    forecastUrl.search = new URLSearchParams({
-      latitude: String(location.latitude),
-      longitude: String(location.longitude),
-      current: 'temperature_2m,apparent_temperature,weather_code',
-      temperature_unit: 'celsius',
-      timezone: location.timezone || 'auto'
-    }).toString();
-    const forecastResponse = await fetch(forecastUrl);
-    if (!forecastResponse.ok) throw new Error(`Météo de destination indisponible (${forecastResponse.status}).`);
-    const forecast = await forecastResponse.json();
-    if (
-      typeof forecast.current?.temperature_2m !== 'number' ||
-      typeof forecast.current?.weather_code !== 'number'
-    ) {
-      throw new Error('Les données météo de cette destination sont incomplètes.');
-    }
-    const isCountryCenter = location.feature_code === 'PCLI';
-    const place = isCountryCenter
-      ? `${location.name} (centre du pays, estimation)`
-      : [location.name, location.admin1, location.country]
-        .filter((part, index, parts) => part && parts.indexOf(part) === index)
-        .join(', ');
-    const apparentTemperature = typeof forecast.current.apparent_temperature === 'number'
-      ? ` · ressenti ${Math.round(forecast.current.apparent_temperature)} °C`
-      : '';
-    const currentTime = typeof forecast.current.time === 'string'
-      ? ` · ${forecast.current.time.slice(-5)} heure locale`
-      : '';
-    destinationWeatherResult.textContent =
-      `${place} : ${Math.round(forecast.current.temperature_2m)} °C, ` +
-      `${weatherLabels[forecast.current.weather_code] ?? 'conditions actuelles'}` +
-      `${apparentTemperature}${currentTime}.`;
-    showPoints('weather-map', [{
-      latitude: location.latitude,
-      longitude: location.longitude,
-      label: place,
-      zoom: isCountryCenter ? 5 : 9
-    }]);
-  } catch (error) {
-    destinationWeatherResult.textContent = error.message || 'Impossible de récupérer la météo de destination.';
-    destinationWeatherResult.classList.add('is-error');
-  } finally {
-    submitButton.disabled = false;
-    submitButton.innerHTML = 'Voir la météo <span aria-hidden="true">→</span>';
-  }
-});
+  const apparentTemperature = typeof current.apparent_temperature === 'number'
+    ? ` · ressenti ${Math.round(current.apparent_temperature)} °C`
+    : '';
+  weatherResult.textContent =
+    `${Math.round(current.temperature_2m)} °C · ${weatherLabels[current.weather_code] ?? 'Conditions actuelles'}` +
+    `${apparentTemperature}`;
+  weatherDescription.textContent = 'Conditions météo à votre position, actualisées toutes les 10 minutes.';
+}
 
 weatherButton.addEventListener('click', () => {
   if (!navigator.geolocation) {
-    weatherDescription.textContent = 'La géolocalisation n’est pas disponible dans ce navigateur.';
+    weatherResult.textContent = 'La géolocalisation n’est pas disponible dans ce navigateur.';
     return;
   }
   weatherButton.disabled = true;
   weatherButton.textContent = 'Localisation…';
-  weatherDescription.textContent = 'Recherche de la météo près de vous…';
+  weatherResult.textContent = 'Recherche de la météo près de vous…';
   navigator.geolocation.getCurrentPosition(async position => {
     try {
       const { latitude, longitude } = position.coords;
-      const endpoint = new URL('https://api.open-meteo.com/v1/forecast');
-      endpoint.search = new URLSearchParams({
-        latitude: String(latitude),
-        longitude: String(longitude),
-        current: 'temperature_2m,apparent_temperature,weather_code',
-        temperature_unit: 'celsius',
-        timezone: 'auto'
-      }).toString();
-      const response = await fetch(endpoint);
-      if (!response.ok) throw new Error(`Météo indisponible (${response.status}).`);
-      const data = await response.json();
-      const current = data.current;
-      if (!current || typeof current.temperature_2m !== 'number') {
-        throw new Error('Les données météo reçues sont incomplètes.');
+      weatherCoordinates = { latitude, longitude };
+      if (weatherMapEntry) {
+        weatherMapEntry.map.setView([latitude, longitude], 6);
+        weatherLocationMarker?.remove();
+        weatherLocationMarker = L.circleMarker([latitude, longitude], {
+          color: '#fff',
+          fillColor: '#2f6b55',
+          fillOpacity: 1,
+          radius: 7,
+          weight: 2
+        }).bindPopup('Votre position').addTo(weatherMapEntry.map);
       }
-      weatherResult.textContent = `${Math.round(current.temperature_2m)}°C · ${weatherLabels[current.weather_code] ?? 'Conditions actuelles'}`;
-      weatherDescription.textContent = `Ressenti ${Math.round(current.apparent_temperature)}°C · météo actuelle près de vous`;
+      await loadCurrentWeather(latitude, longitude);
       weatherButton.textContent = 'Actualiser ↻';
     } catch (error) {
-      weatherDescription.textContent = error.message || 'Impossible de récupérer la météo pour le moment.';
-      weatherResult.textContent = '';
+      weatherResult.textContent = error.message || 'Impossible de récupérer la météo pour le moment.';
       weatherButton.textContent = 'Réessayer →';
     } finally {
       weatherButton.disabled = false;
@@ -583,11 +670,20 @@ weatherButton.addEventListener('click', () => {
     const message = error.code === error.PERMISSION_DENIED
       ? 'Autorisez la localisation pour afficher la météo près de vous.'
       : 'Votre position est indisponible. Vérifiez les réglages de localisation.';
-    weatherDescription.textContent = message;
+    weatherResult.textContent = message;
     weatherButton.textContent = 'Réessayer →';
     weatherButton.disabled = false;
   }, { timeout: 10000, maximumAge: 300000 });
 });
+
+setInterval(() => {
+  if (!document.hidden && weatherCoordinates) {
+    loadCurrentWeather(weatherCoordinates.latitude, weatherCoordinates.longitude)
+      .catch(error => {
+        weatherResult.textContent = error.message || 'Impossible de mettre à jour la météo.';
+      });
+  }
+}, 600_000);
 
 renderShipments();
 updateWidget();
