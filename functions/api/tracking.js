@@ -27,6 +27,28 @@ function routePlace(shipment, field, flightField) {
   return typeof flightPlace === 'string' && flightPlace.trim() ? flightPlace.trim() : null;
 }
 
+function parcelsErrorCode(data) {
+  const code = data?.error?.code;
+  return typeof code === 'string' && /^[A-Z][A-Z0-9_]{1,63}$/.test(code) ? code : null;
+}
+
+function parcelsErrorMessage(code) {
+  const messages = {
+    MISSING_API_KEY: 'Parcels ne reçoit pas la clé API. Vérifiez le secret PARCELS_API_KEY et son format Bearer.',
+    INVALID_API_KEY: 'Parcels ne reconnaît pas cette clé API. Vérifiez qu’elle est bien activée pour l’API v4.',
+    SUBSCRIPTION_NOT_FOUND: 'La clé est reconnue, mais aucun abonnement Parcels ne lui est associé.',
+    UNCONFIRMED_ACCOUNT: 'L’adresse e-mail du compte Parcels doit être confirmée.',
+    SUBSCRIPTION_INACTIVE: 'L’abonnement Parcels associé à la clé est inactif.',
+    INVALID_SUBSCRIPTION_STATE: 'L’état de l’abonnement Parcels ne permet pas le suivi.',
+    FORBIDDEN: 'Le suivi API est désactivé pour ce compte Parcels.',
+    SUBSCRIPTION_LIMIT_REACHED: 'Le quota de suivi Parcels de cet abonnement est atteint.',
+    RATE_LIMITED: 'Parcels limite temporairement le nombre de requêtes. Réessayez plus tard.',
+    BUSY: 'Le service de suivi Parcels est temporairement occupé. Réessayez plus tard.',
+    SERVER_ERROR: 'Parcels a rencontré une erreur interne.'
+  };
+  return messages[code] ?? 'Parcels n’a pas pu traiter la requête.';
+}
+
 export async function onRequestPost({ request, env }) {
   const requestUrl = new URL(request.url);
   if (request.headers.get('Origin') !== requestUrl.origin) {
@@ -79,21 +101,33 @@ export async function onRequestPost({ request, env }) {
       },
       ...(body ? { body } : {})
     });
-  } catch {
+  } catch (error) {
+    console.error('Parcels API network request failed', {
+      errorName: error instanceof Error ? error.name : 'UnknownError'
+    });
     return json({ error: 'L’API Parcels est momentanément injoignable.' }, 502);
   }
 
   if (!upstream.ok) {
-    if (upstream.status === 401 || upstream.status === 403) {
-      return json({ error: 'La clé API Parcels est refusée. Vérifiez le secret Cloudflare.' }, 502);
+    let errorData = null;
+    if (upstream.headers.get('content-type')?.includes('application/json')) {
+      try {
+        errorData = await upstream.json();
+      } catch {
+        // The status and content type still provide a useful diagnostic.
+      }
     }
-    if (upstream.status === 402 || upstream.status === 429) {
-      return json({ error: 'Le quota gratuit Parcels est atteint ou temporairement indisponible.' }, 429);
-    }
-    if (upstream.status === 400) {
-      return json({ error: 'Ce numéro ne peut pas être suivi automatiquement. Vous pouvez renseigner les lieux manuellement.' }, 422);
-    }
-    return json({ error: 'L’API Parcels n’a pas pu fournir le trajet.' }, 502);
+    const code = parcelsErrorCode(errorData) ?? `HTTP_${upstream.status}`;
+    console.error('Parcels API returned an error', { status: upstream.status, code });
+    const status = upstream.status === 400
+      ? 422
+      : upstream.status === 402 || upstream.status === 429
+        ? 429
+        : 502;
+    return json({
+      error: parcelsErrorMessage(code),
+      detail: `Parcels API v4 · HTTP ${upstream.status} · ${code}`
+    }, status);
   }
 
   let data;

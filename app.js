@@ -710,7 +710,10 @@ async function requestParcelTracking(trackingNumber, requestId) {
   if (!result || typeof result !== 'object' || Array.isArray(result)) {
     throw new Error('Le serveur de suivi a renvoyé une réponse invalide.');
   }
-  if (!response.ok) throw new Error(result.error || `Suivi indisponible (${response.status}).`);
+  if (!response.ok) {
+    const message = result.error || `Suivi indisponible (${response.status}).`;
+    throw new Error(result.detail ? `${message} (${result.detail})` : message);
+  }
   return result;
 }
 
