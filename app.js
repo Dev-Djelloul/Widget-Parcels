@@ -647,12 +647,12 @@ function initializeParcelGlobe() {
     style: 'https://tiles.openfreemap.org/styles/liberty',
     center: [0, 20],
     zoom: 0.7,
-    projection: { type: 'globe' },
     attributionControl: true,
     scrollZoom: false
   });
   parcelGlobe.addControl(new NavigationControl(), 'top-right');
   parcelGlobe.once('load', () => {
+    parcelGlobe.setProjection({ type: 'globe' });
     parcelGlobe.addSource('parcel-route', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] }
