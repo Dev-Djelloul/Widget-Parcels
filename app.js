@@ -224,18 +224,49 @@ function formatDate(dateString) {
 function detectCarrier(trackingNumber) {
   const number = trackingNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
   const carriers = [
-    { id: 'ups', label: 'UPS', mark: 'UPS', matches: value => /^1Z[A-Z0-9]{16}$/.test(value) },
-    { id: 'dhl', label: 'DHL', mark: 'DHL', matches: value => /^(?:JJD|JVGL|JD|3S)[A-Z0-9]{8,}$/.test(value) },
-    { id: 'laposte', label: 'La Poste / Colissimo', mark: 'LP', matches: value => /^[A-Z]{2}\d{9}FR$/.test(value) },
-    { id: 'royal-mail', label: 'Royal Mail', mark: 'RM', matches: value => /^[A-Z]{2}\d{9}GB$/.test(value) },
-    { id: 'postnl', label: 'PostNL', mark: 'NL', matches: value => /^[A-Z]{2}\d{9}NL$/.test(value) },
-    { id: 'usps', label: 'USPS', mark: 'US', matches: value => /^(?:92|93|94|95)\d{18,20}$/.test(value) },
-    { id: 'fedex', label: 'FedEx', mark: 'FDX', matches: value => /^\d{12}$|^\d{15}$|^\d{20}$|^\d{22}$/.test(value) }
+    { id: 'ups', label: 'UPS', mark: 'UPS', hint: true, matches: value => /^1Z[A-Z0-9]{16}$/.test(value) },
+    { id: 'dhl', label: 'DHL', mark: 'DHL', hint: true, matches: value => /^(?:JJD|JVGL|JD|3S)[A-Z0-9]{8,}$/.test(value) },
+    { id: 'laposte', label: 'La Poste / Colissimo', mark: 'LP', hint: true, matches: value => /^[A-Z]{2}\d{9}FR$/.test(value) },
+    { id: 'royal-mail', label: 'Royal Mail', mark: 'RM', hint: true, matches: value => /^[A-Z]{2}\d{9}GB$/.test(value) },
+    { id: 'postnl', label: 'PostNL', mark: 'postNL', hint: true, matches: value => /^[A-Z]{2}\d{9}NL$/.test(value) },
+    { id: 'usps', label: 'USPS', mark: 'USPS', hint: true, matches: value => /^(?:92|93|94|95)\d{18,20}$/.test(value) },
+    { id: 'fedex', label: 'FedEx', mark: 'FedEx', hint: true, matches: value => /^\d{12}$|^\d{15}$|^\d{20}$|^\d{22}$/.test(value) },
+    { id: 'canada-post', label: 'Canada Post', mark: 'CA', matches: value => /^[A-Z]{2}\d{9}CA$/.test(value) },
+    { id: 'australia-post', label: 'Australia Post', mark: 'AU', matches: value => /^[A-Z]{2}\d{9}AU$/.test(value) },
+    { id: 'china-post', label: 'China Post', mark: 'CN', matches: value => /^[A-Z]{2}\d{9}CN$/.test(value) },
+    { id: 'japan-post', label: 'Japan Post', mark: 'JP', matches: value => /^[A-Z]{2}\d{9}JP$/.test(value) },
+    { id: 'india-post', label: 'India Post', mark: 'IN', matches: value => /^[A-Z]{2}\d{9}IN$/.test(value) },
+    { id: 'correos', label: 'Correos', mark: 'ES', matches: value => /^[A-Z]{2}\d{9}ES$/.test(value) },
+    { id: 'ctt', label: 'CTT Portugal', mark: 'CTT', matches: value => /^[A-Z]{2}\d{9}PT$/.test(value) },
+    { id: 'poste-italiane', label: 'Poste Italiane', mark: 'IT', matches: value => /^[A-Z]{2}\d{9}IT$/.test(value) },
+    { id: 'swiss-post', label: 'Swiss Post', mark: 'CH', matches: value => /^[A-Z]{2}\d{9}CH$/.test(value) },
+    { id: 'deutsche-post', label: 'Deutsche Post', mark: 'DE', matches: value => /^[A-Z]{2}\d{9}DE$/.test(value) },
+    { id: 'austrian-post', label: 'Austrian Post', mark: 'AT', matches: value => /^[A-Z]{2}\d{9}AT$/.test(value) },
+    { id: 'singapore-post', label: 'Singapore Post', mark: 'SG', matches: value => /^[A-Z]{2}\d{9}SG$/.test(value) },
+    { id: 'new-zealand-post', label: 'New Zealand Post', mark: 'NZ', matches: value => /^[A-Z]{2}\d{9}NZ$/.test(value) },
+    { id: 'brazil-post', label: 'Correios Brasil', mark: 'BR', matches: value => /^[A-Z]{2}\d{9}BR$/.test(value) },
+    { id: 'bpost', label: 'bpost Belgique', mark: 'BE', matches: value => /^[A-Z]{2}\d{9}BE$/.test(value) },
+    { id: 'postnord', label: 'PostNord', mark: 'PN', matches: value => /^[A-Z]{2}\d{9}(?:SE|DK)$/.test(value) },
+    { id: 'posten', label: 'Posten Norge', mark: 'NO', matches: value => /^[A-Z]{2}\d{9}NO$/.test(value) },
+    { id: 'posti', label: 'Posti Finlande', mark: 'FI', matches: value => /^[A-Z]{2}\d{9}FI$/.test(value) },
+    { id: 'korea-post', label: 'Korea Post', mark: 'KR', matches: value => /^[A-Z]{2}\d{9}KR$/.test(value) },
+    { id: 'hongkong-post', label: 'Hongkong Post', mark: 'HK', matches: value => /^[A-Z]{2}\d{9}HK$/.test(value) },
+    { id: 'correos-mexico', label: 'Correos de México', mark: 'MX', matches: value => /^[A-Z]{2}\d{9}MX$/.test(value) },
+    { id: 'south-african-post', label: 'South African Post', mark: 'ZA', matches: value => /^[A-Z]{2}\d{9}ZA$/.test(value) },
+    { id: 'poczta-polska', label: 'Poczta Polska', mark: 'PL', matches: value => /^[A-Z]{2}\d{9}PL$/.test(value) },
+    { id: 'ptt', label: 'PTT Türkiye', mark: 'PTT', matches: value => /^[A-Z]{2}\d{9}TR$/.test(value) },
+    { id: 'an-post', label: 'An Post', mark: 'IE', matches: value => /^[A-Z]{2}\d{9}IE$/.test(value) },
+    { id: 'israel-post', label: 'Israel Post', mark: 'IL', matches: value => /^[A-Z]{2}\d{9}IL$/.test(value) },
+    { id: 'emirates-post', label: 'Emirates Post', mark: 'AE', matches: value => /^[A-Z]{2}\d{9}AE$/.test(value) },
+    { id: 'yunexpress', label: 'YunExpress', mark: 'YUN', matches: value => /^YT\d{16}$/.test(value) },
+    { id: 'sf-express', label: 'SF Express', mark: 'SF', matches: value => /^SF\d{13}$/.test(value) },
+    { id: '4px', label: '4PX', mark: '4PX', matches: value => /^4PX[A-Z0-9]{12,16}$/.test(value) }
   ];
   return carriers.find(carrier => carrier.matches(number)) ?? {
     id: 'generic',
     label: 'Transporteur non détecté',
-    mark: '▣'
+    mark: 'PKG',
+    hint: false
   };
 }
 
@@ -291,7 +322,8 @@ function renderShipments() {
     icon.dataset.carrier = carrier.id;
     icon.textContent = carrier.mark;
     icon.title = carrier.label;
-    icon.setAttribute('aria-label', carrier.label);
+    icon.setAttribute('role', 'img');
+    icon.setAttribute('aria-label', `Transporteur : ${carrier.label}`);
 
     const info = document.createElement('div');
     info.className = 'shipment-info';
@@ -353,7 +385,10 @@ function renderShipments() {
       const date = document.createElement('span');
       date.className = 'shipment-date';
       date.textContent = `Ajouté le ${formatDate(shipment.addedAt)}`;
-      info.append(date);
+      const carrierName = document.createElement('span');
+      carrierName.className = 'shipment-carrier';
+      carrierName.textContent = carrier.label;
+      info.append(carrierName, date);
     }
 
     const actions = document.createElement('div');
@@ -686,7 +721,7 @@ async function requestParcelTracking(trackingNumber, requestId) {
     ? { requestId }
     : {
       trackingNumber,
-      ...(carrier.id === 'generic' ? {} : { carrierHint: carrier.id })
+      ...(carrier.hint ? { carrierHint: carrier.id } : {})
     };
   const response = await fetch('/api/tracking', {
     method: 'POST',

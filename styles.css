@@ -121,14 +121,33 @@ h1 { font-size: clamp(30px, 3.1vw, 42px); letter-spacing: -1.8px; line-height: 1
 .add-form button span { font-size: 14px; margin-left: 5px; }
 .form-message { color: var(--green-dark); display: block; font-size: 10px; grid-column: 1 / -1; margin: 0; }
 .form-message.is-error { color: #b14b3c; }
-.shipment-icon[data-carrier="ups"] { background: #f5e7d6; color: #4b2c20; }
-.shipment-icon[data-carrier="fedex"] { background: #eee8f7; color: #4d2483; }
-.shipment-icon[data-carrier="dhl"] { background: #fff3c4; color: #c4121a; }
-.shipment-icon[data-carrier="usps"] { background: #e3edf9; color: #174a8b; }
+.shipment-icon[data-carrier="ups"] { background: #4b2c20; color: #fff; }
+.shipment-icon[data-carrier="fedex"] { background: #eee8f7; color: #4d2483; font-size: 10px; }
+.shipment-icon[data-carrier="dhl"] { background: #fff3c4; color: #c4121a; font-size: 10px; }
+.shipment-icon[data-carrier="usps"] { background: #e3edf9; color: #174a8b; font-size: 9px; }
 .shipment-icon[data-carrier="laposte"] { background: #fff0cf; color: #845000; }
 .shipment-icon[data-carrier="royal-mail"] { background: #f9e5e5; color: #b10e1e; }
-.shipment-icon[data-carrier="postnl"] { background: #fff0db; color: #8a3d00; }
-.shipment-icon[data-carrier="generic"] { background: #f3f5f0; color: var(--green); font-size: 15px; }
+.shipment-icon[data-carrier="postnl"] { background: #fff0db; color: #8a3d00; font-size: 9px; }
+.shipment-icon[data-carrier="canada-post"] { background: #f9e5e5; color: #c8102e; }
+.shipment-icon[data-carrier="australia-post"] { background: #e5edf8; color: #0067a0; }
+.shipment-icon[data-carrier="china-post"] { background: #fff0e5; color: #c62828; }
+.shipment-icon[data-carrier="japan-post"] { background: #f9e5e5; color: #c8102e; }
+.shipment-icon[data-carrier="india-post"] { background: #fff1db; color: #b76719; }
+.shipment-icon[data-carrier="yunexpress"] { background: #fff0e5; color: #ed6a22; }
+.shipment-icon[data-carrier="sf-express"] { background: #f9e5e5; color: #c8102e; }
+.shipment-icon[data-carrier="4px"] { background: #e5edf8; color: #174a8b; }
+.shipment-icon[data-carrier="correos"], .shipment-icon[data-carrier="ctt"],
+.shipment-icon[data-carrier="poste-italiane"], .shipment-icon[data-carrier="swiss-post"],
+.shipment-icon[data-carrier="deutsche-post"], .shipment-icon[data-carrier="austrian-post"],
+.shipment-icon[data-carrier="singapore-post"], .shipment-icon[data-carrier="new-zealand-post"],
+.shipment-icon[data-carrier="brazil-post"], .shipment-icon[data-carrier="bpost"],
+.shipment-icon[data-carrier="postnord"], .shipment-icon[data-carrier="posten"],
+.shipment-icon[data-carrier="posti"], .shipment-icon[data-carrier="korea-post"],
+.shipment-icon[data-carrier="hongkong-post"], .shipment-icon[data-carrier="correos-mexico"],
+.shipment-icon[data-carrier="south-african-post"], .shipment-icon[data-carrier="poczta-polska"],
+.shipment-icon[data-carrier="ptt"], .shipment-icon[data-carrier="an-post"],
+.shipment-icon[data-carrier="israel-post"], .shipment-icon[data-carrier="emirates-post"] { background: #e8f1e9; color: var(--green-dark); }
+.shipment-icon[data-carrier="generic"] { background: #f3f5f0; color: var(--green); font-size: 8px; }
 
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; min-width: 0; padding: 20px; }
 .panel-heading { align-items: flex-start; display: flex; justify-content: space-between; }
@@ -136,14 +155,16 @@ h1 { font-size: clamp(30px, 3.1vw, 42px); letter-spacing: -1.8px; line-height: 1
 .panel-heading h2 { align-items: center; display: flex; font-size: 18px; gap: 9px; letter-spacing: -.6px; margin: 0; }
 .count-badge { align-items: center; background: var(--green-light); border-radius: 20px; color: var(--green); display: inline-flex; font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 700; height: 20px; justify-content: center; min-width: 20px; padding: 0 6px; }
 .heading-decoration { color: #c5d4be; font-size: 20px; }
-.shipment-list { display: grid; gap: 8px; margin-top: 17px; }
-.shipment-item { align-items: center; border: 1px solid var(--line); border-radius: 9px; display: grid; gap: 9px; grid-template-columns: 34px minmax(0, 1fr) auto; padding: 10px 9px; }
-.shipment-icon { align-items: center; background: #f3f5f0; border-radius: 8px; color: var(--green); display: flex; font-size: 9px; font-weight: 800; height: 34px; justify-content: center; letter-spacing: -.4px; }
+.shipment-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); margin-top: 17px; width: 100%; }
+.shipment-item { align-items: center; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 12px; grid-template-columns: 46px minmax(0, 1fr) auto; min-width: 0; padding: 15px; transition: border-color .18s, background .18s, box-shadow .18s; }
+.shipment-item:hover { border-color: #cbd9cb; box-shadow: 0 5px 18px rgba(36, 56, 42, .06); }
+.shipment-icon { align-items: center; background: #f3f5f0; border-radius: 11px; color: var(--green); display: flex; font-family: Manrope, sans-serif; font-size: 11px; font-weight: 800; height: 46px; justify-content: center; letter-spacing: -.4px; overflow: hidden; padding: 3px; text-align: center; }
 .shipment-info { min-width: 0; }
-.shipment-name { display: block; font-size: 10px; font-weight: 700; overflow-wrap: anywhere; }
-.shipment-number { display: block; font-size: 10px; font-weight: 700; overflow-wrap: anywhere; }
-.shipment-name + .shipment-number { color: var(--muted); font-size: 9px; font-weight: 500; margin-top: 3px; }
-.shipment-date { color: var(--muted); display: block; font-size: 9px; margin-top: 4px; }
+.shipment-name { display: block; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.shipment-number { display: block; font-size: 11px; font-weight: 700; overflow-wrap: anywhere; }
+.shipment-name + .shipment-number { color: var(--muted); font-size: 10px; font-weight: 500; margin-top: 3px; }
+.shipment-carrier { background: var(--surface-soft); border-radius: 20px; color: var(--muted); display: inline-block; font-size: 9px; font-weight: 600; margin-top: 6px; padding: 3px 8px; }
+.shipment-date { color: var(--muted); display: block; font-size: 9px; margin-top: 5px; }
 .shipment-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 3px; justify-content: flex-end; }
 .shipment-select, .shipment-remove, .shipment-rename { background: transparent; border: 0; border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 10px; padding: 6px; }
 .shipment-select:hover { background: var(--green-light); color: var(--green); }
