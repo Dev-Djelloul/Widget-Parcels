@@ -34,6 +34,8 @@ function parcelsErrorCode(data) {
 
 function parcelsErrorMessage(code) {
   const messages = {
+    NO_SHIPMENTS: 'Parcels n’a pas trouvé de suivi pour ce numéro. Pour certains transporteurs, le pays de destination est nécessaire.',
+    DESTINATION_COUNTRY_REQUIRED: 'Parcels a besoin du pays de destination pour détecter le transporteur.',
     MISSING_API_KEY: 'Parcels ne reçoit pas la clé API. Vérifiez le secret PARCELS_API_KEY et son format Bearer.',
     INVALID_API_KEY: 'Parcels ne reconnaît pas cette clé API. Vérifiez qu’elle est bien activée pour l’API v4.',
     SUBSCRIPTION_NOT_FOUND: 'La clé est reconnue, mais aucun abonnement Parcels ne lui est associé.',
@@ -70,23 +72,33 @@ export async function onRequestPost({ request, env }) {
 
   let endpoint;
   let body;
+  let trackingNumber = '';
+  let carrierHint = '';
+  let destinationCountry = '';
   if (typeof payload?.requestId === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(payload.requestId)) {
     endpoint = `https://parcelsapp.com/api/v4/trackings/${encodeURIComponent(payload.requestId)}`;
   } else {
-    const trackingNumber = typeof payload?.trackingNumber === 'string' ? payload.trackingNumber.trim() : '';
+    trackingNumber = typeof payload?.trackingNumber === 'string' ? payload.trackingNumber.trim() : '';
     if (!trackingNumber || trackingNumber.length > 120) {
       return json({ error: 'Numéro de suivi invalide.' }, 400);
     }
-    const carrierHint = typeof payload.carrierHint === 'string' ? payload.carrierHint : '';
+    carrierHint = typeof payload.carrierHint === 'string' ? payload.carrierHint : '';
     if (carrierHint && !allowedCarrierHints.has(carrierHint)) {
       return json({ error: 'Transporteur non pris en charge.' }, 400);
+    }
+    destinationCountry = typeof payload.destinationCountry === 'string'
+      ? payload.destinationCountry.trim()
+      : '';
+    if (destinationCountry.length > 100) {
+      return json({ error: 'Pays de destination invalide.' }, 400);
     }
     endpoint = 'https://parcelsapp.com/api/v4/trackings';
     body = JSON.stringify({
       language: 'en',
       shipments: [{
         tracking_number: trackingNumber,
-        ...(carrierHint ? { carrier_hint: carrierHint } : {})
+        ...(carrierHint ? { carrier_hint: carrierHint } : {}),
+        ...(destinationCountry ? { destination_country: destinationCountry } : {})
       }]
     });
   }
@@ -108,6 +120,38 @@ export async function onRequestPost({ request, env }) {
     return json({ error: 'L’API Parcels est momentanément injoignable.' }, 502);
   }
 
+  if (!upstream.ok && body && carrierHint && upstream.status === 400 && !destinationCountry) {
+    let errorData = null;
+    if (upstream.headers.get('content-type')?.includes('application/json')) {
+      try {
+        errorData = await upstream.clone().json();
+      } catch {
+        // Fall through to the original Parcels error.
+      }
+    }
+    if (parcelsErrorCode(errorData) === 'NO_SHIPMENTS') {
+      body = JSON.stringify({
+        language: 'en',
+        shipments: [{ tracking_number: trackingNumber }]
+      });
+      try {
+        upstream = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${env.PARCELS_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body
+        });
+      } catch (error) {
+        console.error('Parcels API fallback request failed', {
+          errorName: error instanceof Error ? error.name : 'UnknownError'
+        });
+        return json({ error: 'L’API Parcels est momentanément injoignable.' }, 502);
+      }
+    }
+  }
+
   if (!upstream.ok) {
     let errorData = null;
     if (upstream.headers.get('content-type')?.includes('application/json')) {
@@ -126,7 +170,8 @@ export async function onRequestPost({ request, env }) {
         : 502;
     return json({
       error: parcelsErrorMessage(code),
-      detail: `Parcels API v4 · HTTP ${upstream.status} · ${code}`
+      detail: `Parcels API v4 · HTTP ${upstream.status} · ${code}`,
+      needsDestinationCountry: ['NO_SHIPMENTS', 'DESTINATION_COUNTRY_REQUIRED'].includes(code)
     }, status);
   }
 
@@ -146,7 +191,22 @@ export async function onRequestPost({ request, env }) {
   }
 
   const shipment = getShipment(data);
-  if (!shipment) return json({ origin: null, destination: null });
+  if (!shipment) {
+    const rejected = Array.isArray(data.rejected) ? data.rejected[0] : null;
+    const code = typeof rejected?.code === 'string' ? rejected.code : 'NO_SHIPMENTS';
+    return json({
+      error: parcelsErrorMessage(code),
+      detail: `Parcels API v4 · ${code}`,
+      needsDestinationCountry: ['NO_SHIPMENTS', 'DESTINATION_COUNTRY_REQUIRED'].includes(code)
+    }, 422);
+  }
+  if (typeof shipment.error === 'string' && shipment.error) {
+    return json({
+      error: parcelsErrorMessage(shipment.error),
+      detail: `Parcels API v4 · ${shipment.error}`,
+      needsDestinationCountry: ['NO_SHIPMENTS', 'DESTINATION_COUNTRY_REQUIRED'].includes(shipment.error)
+    }, 422);
+  }
   const states = Array.isArray(shipment.states) ? shipment.states : [];
   return json({
     origin: routePlace(shipment, 'origin', 'origin'),
@@ -165,7 +225,18 @@ export async function onRequestPost({ request, env }) {
         date: typeof state.date === 'string' ? state.date : null,
         eventCode: typeof state.event_code === 'string' ? state.event_code.slice(0, 40) : null,
         station: typeof state.station === 'string' ? state.station.slice(0, 40) : null,
-        flightNumber: typeof state.flight_number === 'string' ? state.flight_number.slice(0, 40) : null
+        flightNumber: typeof state.flight_number === 'string' ? state.flight_number.slice(0, 40) : null,
+        flightOrigin: typeof state.flight_origin === 'string' ? state.flight_origin.slice(0, 8) : null,
+        flightDestination: typeof state.flight_destination === 'string' ? state.flight_destination.slice(0, 8) : null
+      }];
+    }),
+    flightLegs: (Array.isArray(shipment.flight_legs) ? shipment.flight_legs : []).slice(0, 20).flatMap(leg => {
+      if (!leg || typeof leg !== 'object') return [];
+      return [{
+        flightNumber: typeof leg.flight_number === 'string' ? leg.flight_number.slice(0, 40) : null,
+        origin: typeof leg.origin === 'string' ? leg.origin.slice(0, 8) : null,
+        destination: typeof leg.destination === 'string' ? leg.destination.slice(0, 8) : null,
+        status: typeof leg.status === 'string' ? leg.status.slice(0, 100) : null
       }];
     })
   });

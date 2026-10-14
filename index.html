@@ -146,6 +146,12 @@
                 <p class="tracking-summary-message">Ajoutez ou sélectionnez un colis pour afficher ses étapes de suivi.</p>
               </div>
               <ol class="tracking-events" id="tracking-events" aria-label="Historique des événements du colis"></ol>
+              <form class="tracking-country-form" id="tracking-country-form" hidden>
+                <p>Impossible d’associer ce numéro à un envoi. Indiquez ou corrigez le pays de destination, nécessaire pour certains transporteurs, puis relancez la recherche.</p>
+                <label class="visually-hidden" for="tracking-destination-country">Pays de destination</label>
+                <input id="tracking-destination-country" type="text" autocomplete="country-name" maxlength="100" placeholder="Pays de destination (ex. France ou FR)" required>
+                <button type="submit">Réessayer le suivi</button>
+              </form>
               <p class="widget-caption">Étapes communiquées par le transporteur via Parcels. Les lieux et horaires dépendent des informations disponibles.</p>
               <a class="external-link" id="parcel-tracking-link" href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">Ouvrir la fiche Parcel App <span aria-hidden="true">↗</span></a>
             </div>
