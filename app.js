@@ -12,8 +12,7 @@ const parcelTrackingLink = document.querySelector('#parcel-tracking-link');
 const weatherButton = document.querySelector('#weather-button');
 const weatherResult = document.querySelector('#weather-result');
 const weatherDescription = document.querySelector('#weather-description');
-const weatherRadarStatus = document.querySelector('#weather-radar-status');
-const weatherRadarPlayButton = document.querySelector('#weather-radar-play');
+const weatherMap = document.querySelector('#weather-map');
 const sidebarToggle = document.querySelector('#sidebar-toggle');
 const installButton = document.querySelector('#install-button');
 const mobileMenuQuery = window.matchMedia('(max-width: 760px)');
@@ -436,86 +435,28 @@ function showPoints(id, points) {
 const placeName = location => [location.name, location.admin1, location.country]
   .filter((part, index, parts) => part && parts.indexOf(part) === index).join(', ');
 
-const weatherMapEntry = getMap('weather-map', { center: [46.6, 2.4], zoom: 5 });
-let weatherRadarLayer;
-let weatherRadarFrames = [];
-let weatherRadarFrameIndex = -1;
-let weatherRadarPlayback;
+function setWeatherMapLocation(latitude, longitude) {
+  const endpoint = new URL('https://embed.windy.com/embed.html');
+  endpoint.search = new URLSearchParams({
+    type: 'map',
+    location: 'coordinates',
+    metricRain: 'default',
+    metricTemp: 'default',
+    metricWind: 'default',
+    zoom: '6',
+    overlay: 'rain',
+    product: 'ecmwf',
+    level: 'surface',
+    lat: String(latitude),
+    lon: String(longitude),
+    detailLat: String(latitude),
+    detailLon: String(longitude),
+    lang: 'fr'
+  }).toString();
+  weatherMap.src = endpoint.toString();
+}
+
 let weatherCoordinates;
-let weatherLocationMarker;
-
-function showRadarFrame(index) {
-  const frame = weatherRadarFrames[index];
-  if (!frame || !weatherMapEntry) return;
-  weatherRadarFrameIndex = index;
-  const tileUrl = `${weatherRadarHost}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
-  if (!weatherRadarLayer) {
-    weatherRadarLayer = L.tileLayer(tileUrl, {
-      maxZoom: 18,
-      maxNativeZoom: 7,
-      opacity: 0.68,
-      attribution: '&copy; <a href="https://www.rainviewer.com/">RainViewer</a>'
-    }).addTo(weatherMapEntry.map);
-  } else {
-    weatherRadarLayer.setUrl(tileUrl);
-  }
-  const time = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' })
-    .format(new Date(frame.time * 1000));
-  weatherRadarStatus.textContent = `Radar des précipitations · image de ${time}`;
-}
-
-let weatherRadarHost = '';
-async function refreshWeatherRadar() {
-  weatherRadarStatus.classList.remove('is-error');
-  if (weatherRadarFrames.length === 0) weatherRadarStatus.textContent = 'Chargement du radar…';
-  try {
-    const response = await fetch('https://api.rainviewer.com/public/weather-maps.json', { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Radar météo indisponible (${response.status}).`);
-    const metadata = await response.json();
-    const host = new URL(metadata.host);
-    if (host.protocol !== 'https:' || !host.hostname.endsWith('.rainviewer.com')) {
-      throw new Error('Adresse du radar météo invalide.');
-    }
-    if (!weatherMapEntry) throw new Error('La carte météo ne peut pas être affichée.');
-    const frames = metadata.radar?.past;
-    if (!Array.isArray(frames)) throw new Error('Les images du radar météo sont indisponibles.');
-    const validFrames = frames.filter(frame =>
-      Number.isFinite(frame.time) && typeof frame.path === 'string' && /^\/v2\/radar\/[\w-]+$/.test(frame.path)
-    );
-    if (validFrames.length === 0) throw new Error('Aucune image récente du radar météo.');
-    weatherRadarHost = host.origin;
-    weatherRadarFrames = validFrames;
-    weatherRadarPlayButton.disabled = false;
-    if (!weatherRadarPlayback) showRadarFrame(validFrames.length - 1);
-    if (weatherMapEntry) setTimeout(() => weatherMapEntry.map.invalidateSize(), 0);
-  } catch (error) {
-    weatherRadarStatus.textContent = error.message || 'Impossible de charger le radar météo.';
-    weatherRadarStatus.classList.add('is-error');
-  }
-}
-
-weatherRadarPlayButton.addEventListener('click', () => {
-  if (weatherRadarPlayback) {
-    clearInterval(weatherRadarPlayback);
-    weatherRadarPlayback = undefined;
-    weatherRadarPlayButton.textContent = 'Lire le radar';
-    showRadarFrame(weatherRadarFrames.length - 1);
-    return;
-  }
-  if (weatherRadarFrames.length === 0) return;
-  weatherRadarPlayButton.textContent = 'Mettre en pause';
-  let index = 0;
-  showRadarFrame(index);
-  weatherRadarPlayback = setInterval(() => {
-    index = (index + 1) % weatherRadarFrames.length;
-    showRadarFrame(index);
-  }, 700);
-});
-
-refreshWeatherRadar();
-setInterval(() => {
-  if (!document.hidden) refreshWeatherRadar();
-}, 600_000);
 
 const worldClock = document.querySelector('#world-clock');
 const localClock = document.querySelector('#local-clock');
@@ -650,17 +591,7 @@ weatherButton.addEventListener('click', () => {
     try {
       const { latitude, longitude } = position.coords;
       weatherCoordinates = { latitude, longitude };
-      if (weatherMapEntry) {
-        weatherMapEntry.map.setView([latitude, longitude], 6);
-        weatherLocationMarker?.remove();
-        weatherLocationMarker = L.circleMarker([latitude, longitude], {
-          color: '#fff',
-          fillColor: '#2f6b55',
-          fillOpacity: 1,
-          radius: 7,
-          weight: 2
-        }).bindPopup('Votre position').addTo(weatherMapEntry.map);
-      }
+      setWeatherMapLocation(latitude, longitude);
       await loadCurrentWeather(latitude, longitude);
       weatherButton.textContent = 'Actualiser ↻';
     } catch (error) {

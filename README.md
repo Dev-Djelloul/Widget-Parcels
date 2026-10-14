@@ -17,11 +17,11 @@ Servez le répertoire du projet ou le répertoire généré `dist/` avec n’imp
 
 - Suivi des colis : [Parcel App](https://parcelsapp.com/)
 - Géocodage et météo : [Open-Meteo](https://open-meteo.com/)
-- Cartes : [Leaflet](https://leafletjs.com/) et [OpenStreetMap](https://www.openstreetmap.org/)
-- Radar de précipitations : [RainViewer](https://www.rainviewer.com/)
+- Carte météo et prévisions ECMWF : intégration [Windy](https://www.windy.com/)
+- Carte indicative du trajet : [Leaflet](https://leafletjs.com/) et [OpenStreetMap](https://www.openstreetmap.org/)
 - Actualités françaises : flux RSS de [franceinfo](https://www.franceinfo.fr/titres.rss), converti par [RSS2JSON](https://rss2json.com/)
 
-Les numéros de suivi et les préférences restent dans le stockage local du navigateur. La météo locale, le radar, les actualités, le géocodage, les tuiles de carte et le suivi des colis nécessitent une connexion Internet. La position n’est demandée qu’après action sur le bouton météo et n’est pas transmise au service d’actualités.
+Les numéros de suivi et les préférences restent dans le stockage local du navigateur. La météo locale, la carte météo, les actualités, le géocodage, les tuiles de carte et le suivi des colis nécessitent une connexion Internet. La position n’est demandée qu’après action sur le bouton météo et n’est pas transmise au service d’actualités.
 
 ## Déploiement
 

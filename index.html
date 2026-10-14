@@ -14,8 +14,7 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="preconnect" href="https://parcelsapp.com">
     <link rel="preconnect" href="https://tile.openstreetmap.org">
-    <link rel="preconnect" href="https://api.rainviewer.com">
-    <link rel="preconnect" href="https://tilecache.rainviewer.com">
+    <link rel="preconnect" href="https://embed.windy.com">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -74,38 +73,35 @@
           </div>
         </section>
 
-        <section class="weather-card" id="meteo" aria-labelledby="weather-title">
-          <div class="weather-card-heading">
-            <div class="weather-visual" aria-hidden="true"><span class="weather-sun"></span><span class="weather-cloud"></span></div>
-            <div class="weather-copy">
-              <p class="eyebrow">UN ŒIL SUR LE CIEL</p>
-              <h2 id="weather-title">Radar météo en direct</h2>
-              <p id="weather-description">Radar des précipitations centré sur la France. Affichez la météo près de vous avec votre position.</p>
+        <div class="intro-grid">
+          <section class="welcome">
+            <div>
+              <p class="eyebrow"><span class="eyebrow-dot"></span>TOUT VOTRE SUIVI, AU MÊME ENDROIT</p>
+              <h1>Vos colis,<br class="mobile-break"> en toute sérénité<span class="heading-period">.</span></h1>
+              <p class="welcome-copy">Le petit tableau de bord qui garde un œil sur vos livraisons.</p>
             </div>
-          </div>
-          <div class="weather-current">
-            <output class="weather-result" id="weather-result" aria-live="polite">Météo locale non chargée.</output>
-            <button class="weather-button" id="weather-button" type="button">Voir ma météo <span aria-hidden="true">→</span></button>
-          </div>
-          <div class="weather-map-toolbar">
-            <output class="weather-radar-status" id="weather-radar-status" aria-live="off">Chargement du radar…</output>
-            <button class="radar-play-button" id="weather-radar-play" type="button" disabled>Lire le radar</button>
-          </div>
-          <div class="weather-map-frame" id="weather-map" role="img" aria-label="Carte interactive du radar météo des précipitations"></div>
-          <p class="weather-map-caption">Images radar des précipitations observées au cours des deux dernières heures.</p>
-        </section>
-
-        <section class="welcome">
-          <div>
-            <p class="eyebrow"><span class="eyebrow-dot"></span>TOUT VOTRE SUIVI, AU MÊME ENDROIT</p>
-            <h1>Vos colis,<br class="mobile-break"> en toute sérénité<span class="heading-period">.</span></h1>
-            <p class="welcome-copy">Le petit tableau de bord qui garde un œil sur vos livraisons.</p>
-          </div>
-          <div class="welcome-art" aria-hidden="true">
-            <span class="art-sun"></span><span class="art-cloud cloud-one"></span><span class="art-cloud cloud-two"></span>
-            <span class="art-box"><span></span></span><span class="art-spark spark-one">✳</span><span class="art-spark spark-two">✳</span>
-          </div>
-        </section>
+            <div class="welcome-art" aria-hidden="true">
+              <span class="art-sun"></span><span class="art-cloud cloud-one"></span><span class="art-cloud cloud-two"></span>
+              <span class="art-box"><span></span></span><span class="art-spark spark-one">✳</span><span class="art-spark spark-two">✳</span>
+            </div>
+          </section>
+          <section class="weather-card" id="meteo" aria-labelledby="weather-title">
+            <div class="weather-card-heading">
+              <div class="weather-visual" aria-hidden="true"><span class="weather-sun"></span><span class="weather-cloud"></span></div>
+              <div class="weather-copy">
+                <p class="eyebrow">UN ŒIL SUR LE CIEL</p>
+                <h2 id="weather-title">Carte météo professionnelle</h2>
+                <p id="weather-description">Prévisions et précipitations en direct, sur la France.</p>
+              </div>
+            </div>
+            <div class="weather-current">
+              <output class="weather-result" id="weather-result" aria-live="polite">Météo locale non chargée.</output>
+              <button class="weather-button" id="weather-button" type="button">Voir ma météo <span aria-hidden="true">→</span></button>
+            </div>
+            <iframe class="weather-map-frame" id="weather-map" title="Carte météorologique interactive Windy, centrée sur la France" src="https://embed.windy.com/embed.html?type=map&amp;location=coordinates&amp;metricRain=default&amp;metricTemp=default&amp;metricWind=default&amp;zoom=5&amp;overlay=rain&amp;product=ecmwf&amp;level=surface&amp;lat=46.6&amp;lon=2.4&amp;detailLat=46.6&amp;detailLon=2.4&amp;lang=fr" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+            <p class="weather-map-caption">Prévisions ECMWF et couches météo Windy · <a href="https://www.windy.com/" target="_blank" rel="noopener noreferrer">Windy.com</a></p>
+          </section>
+        </div>
 
         <section class="add-card" aria-labelledby="add-title">
           <div class="add-icon" aria-hidden="true">＋</div>
@@ -138,7 +134,7 @@
               <div><p class="eyebrow">PROPULSÉ PAR PARCEL APP</p><h2 id="tracking-title">Suivi en direct</h2></div>
               <span class="live-badge"><span></span> EN DIRECT</span>
             </div>
-            <div class="widget-frame">
+            <div class="widget-frame" aria-label="Suivi détaillé du colis, défilable">
               <iframe id="parcels-widget" title="Widget de suivi de colis Parcel App" src="https://parcelsapp.com/widget?textButton=Suivre%20le%20colis&amp;placeholder=Entrez%20votre%20num%C3%A9ro%20de%20suivi&amp;backgroundColorButton=%232f6b55&amp;colorButton=%23ffffff&amp;borderRadiusButton=10px&amp;borderRadiusInput=10px&amp;widgetWrapBorder=0&amp;widgetWrapBorderRadius=12px" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write"></iframe>
             </div>
             <section class="parcel-route" aria-labelledby="parcel-route-title">
