@@ -694,7 +694,22 @@ async function requestParcelTracking(trackingNumber, requestId) {
     body: JSON.stringify(body),
     cache: 'no-store'
   });
-  const result = await response.json();
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    const message = response.status === 502
+      ? 'Le serveur de suivi a renvoyé une erreur Cloudflare (502).'
+      : `Réponse invalide du serveur de suivi (HTTP ${response.status}).`;
+    throw new Error(message);
+  }
+
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error('Le serveur de suivi a renvoyé une réponse JSON invalide.');
+  }
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    throw new Error('Le serveur de suivi a renvoyé une réponse invalide.');
+  }
   if (!response.ok) throw new Error(result.error || `Suivi indisponible (${response.status}).`);
   return result;
 }
