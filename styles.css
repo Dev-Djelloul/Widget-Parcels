@@ -107,7 +107,7 @@ h1 { font-size: clamp(30px, 3.1vw, 42px); letter-spacing: -1.8px; line-height: 1
 .live-news-item:hover { color: var(--green); text-decoration: underline; }
 .live-news-source { color: var(--muted); font-size: 8px; grid-column: 2; margin: -3px 0 0; }
 
-.add-card { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow); display: grid; gap: 13px; grid-template-columns: 40px minmax(170px, .9fr) minmax(270px, 1.4fr); padding: 17px 19px; position: relative; }
+.add-card { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow); display: grid; gap: 13px; grid-template-columns: 40px minmax(170px, .9fr) minmax(270px, 1.4fr); margin-bottom: 20px; padding: 17px 19px; position: relative; }
 .add-icon { align-items: center; background: var(--green-light); border-radius: 11px; color: var(--green); display: flex; font-size: 23px; height: 40px; justify-content: center; width: 40px; }
 .add-copy h2 { font-size: 13px; letter-spacing: -.2px; margin-bottom: 4px; }
 .add-copy p { color: var(--muted); font-size: 10px; margin: 0; }
@@ -130,6 +130,7 @@ h1 { font-size: clamp(30px, 3.1vw, 42px); letter-spacing: -1.8px; line-height: 1
 .shipment-icon[data-carrier="generic"] { background: #f3f5f0; color: var(--green); font-size: 15px; }
 
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; min-width: 0; padding: 20px; }
+.shipments-panel { margin-bottom: 20px; }
 .panel-heading { align-items: flex-start; display: flex; justify-content: space-between; }
 .panel-heading .eyebrow { font-size: 8px; margin-bottom: 6px; }
 .panel-heading h2 { align-items: center; display: flex; font-size: 18px; gap: 9px; letter-spacing: -.6px; margin: 0; }
