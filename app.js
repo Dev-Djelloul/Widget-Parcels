@@ -547,14 +547,17 @@ function showNewsMessage(message, isError = false) {
 
 async function refreshNews() {
   try {
-    const response = await fetch('/api/news', { headers: { Accept: 'application/rss+xml' }, cache: 'no-store' });
+    const endpoint = new URL('https://api.rss2json.com/v1/api.json');
+    endpoint.searchParams.set('rss_url', 'https://www.franceinfo.fr/titres.rss');
+    const response = await fetch(endpoint, { cache: 'no-store' });
     if (!response.ok) throw new Error(`Actualités indisponibles (${response.status}).`);
-    const xml = new DOMParser().parseFromString(await response.text(), 'application/xml');
-    if (xml.querySelector('parsererror')) throw new Error('Flux d’actualités invalide.');
-    const articles = [...xml.querySelectorAll('channel > item')].slice(0, 3);
-    const links = articles.map(article => {
-      const title = article.querySelector('title')?.textContent?.trim();
-      const href = article.querySelector('link')?.textContent?.trim();
+    const feed = await response.json();
+    if (feed.status !== 'ok' || !Array.isArray(feed.items)) {
+      throw new Error('Le flux des actualités est temporairement indisponible.');
+    }
+    const links = feed.items.slice(0, 3).map(article => {
+      const title = typeof article.title === 'string' ? article.title.trim() : '';
+      const href = typeof article.link === 'string' ? article.link.trim() : '';
       if (!title || !href) return null;
       let url;
       try {
@@ -581,7 +584,7 @@ async function refreshNews() {
 refreshNews();
 setInterval(() => {
   if (!document.hidden) refreshNews();
-}, 300_000);
+}, 600_000);
 
 const parcelRouteForm = document.querySelector('#parcel-route-form');
 const parcelRouteResult = document.querySelector('#parcel-route-result');
