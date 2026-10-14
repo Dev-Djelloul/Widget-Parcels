@@ -1,0 +1,12 @@
+{
+  "name": "colis-tracking-pwa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name colis-digitalblueskye"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.0"
+  }
+}
