@@ -14,6 +14,8 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="preconnect" href="https://parcelsapp.com">
     <link rel="preconnect" href="https://tile.openstreetmap.org">
+    <link rel="preconnect" href="https://embed.windy.com">
+    <link rel="preconnect" href="https://embed.windy.com">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -75,6 +77,13 @@
             <div class="clock-item"><span>Tokyo</span><time id="tokyo-clock">--:--:--</time><small>Japon</small></div>
             <div class="clock-item"><span>New York</span><time id="new-york-clock">--:--:--</time><small>États-Unis</small></div>
           </div>
+          <div class="live-news" aria-labelledby="live-news-title">
+            <h2 class="live-news-title" id="live-news-title"><span class="live-news-dot" aria-hidden="true"></span>À LA UNE</h2>
+            <div class="live-news-items" id="live-news-items" aria-live="polite">
+              <p class="live-news-message">Chargement des actualités…</p>
+            </div>
+            <p class="live-news-source">Titres de franceinfo · actualisation toutes les 10 minutes</p>
+          </div>
         </section>
 
         <section class="weather-card" id="meteo" aria-labelledby="weather-title">
@@ -92,7 +101,15 @@
             </form>
             <button class="weather-button" id="weather-button" type="button">Utiliser ma position <span aria-hidden="true">→</span></button>
           </div>
-          <div class="weather-map map-frame" id="weather-map" role="img" aria-label="Carte météo du lieu sélectionné"></div>
+          <iframe
+            class="weather-map-frame"
+            id="weather-map"
+            title="Carte météorologique interactive Windy, centrée sur le lieu sélectionné"
+            src="https://embed.windy.com/embed.html?type=map&amp;location=coordinates&amp;metricRain=default&amp;metricTemp=default&amp;metricWind=default&amp;zoom=5&amp;overlay=rain&amp;product=ecmwf&amp;level=surface&amp;lat=46.6&amp;lon=2.4&amp;detailLat=46.6&amp;detailLon=2.4&amp;lang=fr"
+            loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            allowfullscreen></iframe>
+          <p class="weather-map-caption">Prévisions ECMWF et couches météo Windy · <a href="https://www.windy.com/" target="_blank" rel="noopener noreferrer">Windy.com</a></p>
         </section>
 
         <section class="add-card" aria-labelledby="add-title">
@@ -134,8 +151,8 @@
             <a class="external-link" id="parcel-tracking-link" href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">Ouvrir la fiche Parcel App <span aria-hidden="true">↗</span></a>
             </div>
             <section class="parcel-route" aria-labelledby="parcel-route-title">
-              <div class="destination-weather-heading">
-                <span class="destination-weather-icon" aria-hidden="true">⌖</span>
+              <div class="parcel-route-heading">
+                <span class="parcel-route-icon" aria-hidden="true">⌖</span>
                 <div>
                   <h3 id="parcel-route-title">Carte du colis</h3>
                   <p>Visualisez le trajet indicatif entre la provenance et la destination renseignées.</p>
@@ -148,7 +165,7 @@
                 <input id="parcel-destination" type="search" autocomplete="off" maxlength="100" placeholder="Destination (ex. Lyon, France)" required>
                 <button type="submit">Afficher le trajet <span aria-hidden="true">→</span></button>
               </form>
-              <output class="destination-weather-result" id="parcel-route-result" aria-live="polite"></output>
+              <output class="parcel-route-result" id="parcel-route-result" aria-live="polite"></output>
               <div class="map-frame" id="parcel-map" role="img" aria-label="Carte de provenance et destination du colis"></div>
             </section>
           </div>
