@@ -147,8 +147,26 @@ export async function onRequestPost({ request, env }) {
 
   const shipment = getShipment(data);
   if (!shipment) return json({ origin: null, destination: null });
+  const states = Array.isArray(shipment.states) ? shipment.states : [];
   return json({
     origin: routePlace(shipment, 'origin', 'origin'),
-    destination: routePlace(shipment, 'destination', 'destination')
+    destination: routePlace(shipment, 'destination', 'destination'),
+    status: typeof shipment.status === 'string' ? shipment.status : null,
+    carrier: typeof shipment.detectedCarrier?.name === 'string'
+      ? shipment.detectedCarrier.name
+      : Array.isArray(shipment.services) && typeof shipment.services[0]?.name === 'string'
+        ? shipment.services[0].name
+        : null,
+    events: states.slice(0, 80).flatMap(state => {
+      if (!state || typeof state.state !== 'string') return [];
+      return [{
+        state: state.state.slice(0, 300),
+        location: typeof state.location === 'string' ? state.location.slice(0, 200) : null,
+        date: typeof state.date === 'string' ? state.date : null,
+        eventCode: typeof state.event_code === 'string' ? state.event_code.slice(0, 40) : null,
+        station: typeof state.station === 'string' ? state.station.slice(0, 40) : null,
+        flightNumber: typeof state.flight_number === 'string' ? state.flight_number.slice(0, 40) : null
+      }];
+    })
   });
 }

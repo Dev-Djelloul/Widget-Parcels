@@ -142,11 +142,12 @@
           </div>
           <div class="tracking-layout">
             <div class="tracking-info">
-            <div class="widget-frame">
-              <iframe id="parcels-widget" title="Widget de suivi de colis Parcel App" src="https://parcelsapp.com/widget?textButton=Suivre%20le%20colis&amp;placeholder=Entrez%20votre%20num%C3%A9ro%20de%20suivi&amp;backgroundColorButton=%232f6b55&amp;colorButton=%23ffffff&amp;borderRadiusButton=10px&amp;borderRadiusInput=10px&amp;widgetWrapBorder=0&amp;widgetWrapBorderRadius=12px" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="clipboard-read; clipboard-write"></iframe>
-            </div>
-            <p class="widget-caption">Le widget affiche les étapes disponibles. Si le colis n’a pas encore de premier scan, ouvrez sa fiche complète pour voir l’état indiqué par Parcel App.</p>
-            <a class="external-link" id="parcel-tracking-link" href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">Ouvrir la fiche Parcel App <span aria-hidden="true">↗</span></a>
+              <div class="tracking-summary" id="tracking-summary" aria-live="polite">
+                <p class="tracking-summary-message">Ajoutez ou sélectionnez un colis pour afficher ses étapes de suivi.</p>
+              </div>
+              <ol class="tracking-events" id="tracking-events" aria-label="Historique des événements du colis"></ol>
+              <p class="widget-caption">Étapes communiquées par le transporteur via Parcels. Les lieux et horaires dépendent des informations disponibles.</p>
+              <a class="external-link" id="parcel-tracking-link" href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">Ouvrir la fiche Parcel App <span aria-hidden="true">↗</span></a>
             </div>
             <section class="parcel-route" aria-labelledby="parcel-route-title">
               <div class="parcel-route-heading">
