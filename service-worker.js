@@ -1,4 +1,4 @@
-const CACHE_NAME = 'widget-parcels-pwa-v51';
+const CACHE_NAME = 'widget-parcels-pwa-v52';
 const APP_SHELL = [
   './',
   './index.html',
