@@ -1,3 +1,5 @@
+import { track17 } from '../_lib/track17.js';
+
 const allowedCarrierHints = new Set([
   'ups',
   'dhl',
@@ -56,6 +58,40 @@ function parcelsErrorMessage(code) {
 }
 
 export async function onRequestPost({ request, env }) {
+  const requestUrl = new URL(request.url);
+  if (request.headers.get('Origin') !== requestUrl.origin) {
+    return json({ error: 'Cette requête doit provenir de l’application.' }, 403);
+  }
+  let payload = null;
+  try {
+    payload = await request.clone().json();
+  } catch {
+    // The Parcels handler reports invalid bodies.
+  }
+
+  if (payload?.provider === '17TRACK' && typeof payload.requestId === 'string') {
+    const result = await track17(env, payload.requestId, { register: false });
+    if (!result) return json({ error: '17TRACK n’a pas pu fournir le suivi.' }, 502);
+    return json(result, result.pending ? 202 : 200);
+  }
+
+  const response = await parcelsHandler({ request, env });
+  const trackingNumber = typeof payload?.trackingNumber === 'string' ? payload.trackingNumber.trim() : '';
+  if (!trackingNumber || response.status === 202) return response;
+
+  let needsFallback = response.status >= 400;
+  if (!needsFallback) {
+    const data = await response.clone().json().catch(() => null);
+    needsFallback = !Array.isArray(data?.events) || data.events.length === 0;
+  }
+  if (!needsFallback || response.status === 403 || response.status === 413) return response;
+
+  const fallback = await track17(env, trackingNumber);
+  if (!fallback || fallback.pending) return response;
+  return json(fallback);
+}
+
+async function parcelsHandler({ request, env }) {
   const requestUrl = new URL(request.url);
   if (request.headers.get('Origin') !== requestUrl.origin) {
     return json({ error: 'Cette requête doit provenir de l’application.' }, 403);
