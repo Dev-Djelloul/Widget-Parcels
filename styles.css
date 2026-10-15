@@ -20,7 +20,7 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; zoom: 1.25; }
+html { scroll-behavior: smooth; zoom: 1.1; }
 body { margin: 0; background: var(--page); color: var(--text); font-size: 14px; }
 button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
