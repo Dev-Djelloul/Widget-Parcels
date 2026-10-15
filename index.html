@@ -33,12 +33,33 @@
         </div>
         <p class="sidebar-label">ESPACE PERSONNEL</p>
         <nav class="main-nav" id="sidebar-navigation">
-          <a class="nav-link is-active" href="#mes-colis" title="Mes colis"><span class="nav-icon" aria-hidden="true">▦</span>Mes colis</a>
-          <a class="nav-link" href="#suivi" title="Suivi en direct"><span class="nav-icon" aria-hidden="true">↗</span>Suivi en direct</a>
-          <a class="nav-link" href="#meteo" title="Météo locale"><span class="nav-icon" aria-hidden="true">☼</span>Météo locale</a>
+          <a class="nav-link" href="#add-form" title="Suivre un colis">
+            <span class="nav-icon" aria-hidden="true">＋</span><span class="nav-text">Suivre un colis</span>
+          </a>
+          <a class="nav-link is-active" href="#mes-colis" title="Mes colis" aria-current="location">
+            <span class="nav-icon" aria-hidden="true">▦</span><span class="nav-text">Mes colis</span>
+            <span class="nav-count" id="sidebar-shipment-count">0</span>
+          </a>
+          <a class="nav-link" href="#suivi" title="Suivi en direct">
+            <span class="nav-icon" aria-hidden="true">↗</span><span class="nav-text">Suivi en direct</span>
+          </a>
+          <a class="nav-link" href="#meteo" title="Météo locale">
+            <span class="nav-icon" aria-hidden="true">☼</span><span class="nav-text">Météo locale</span>
+          </a>
         </nav>
+        <a class="sidebar-current-parcel" id="sidebar-current-parcel" href="#suivi" aria-label="Afficher le suivi du colis sélectionné">
+          <span class="sidebar-parcel-heading"><span class="sidebar-parcel-dot" aria-hidden="true"></span>COLIS SÉLECTIONNÉ</span>
+          <span class="sidebar-parcel-main">
+            <span class="sidebar-parcel-icon" id="sidebar-parcel-icon" aria-hidden="true">PKG</span>
+            <span class="sidebar-parcel-copy">
+              <strong id="sidebar-parcel-carrier">Aucun colis</strong>
+              <span id="sidebar-parcel-number">Ajoutez un colis pour commencer</span>
+            </span>
+          </span>
+          <span class="sidebar-parcel-status" id="sidebar-parcel-status">Accéder au suivi <span aria-hidden="true">→</span></span>
+        </a>
         <div class="sidebar-bottom">
-        <div class="privacy-note"><span class="privacy-icon" aria-hidden="true">⌑</span><p>Vos suivis restent privés et sont enregistrés uniquement sur cet appareil.</p></div>
+          <div class="privacy-note"><span class="privacy-icon" aria-hidden="true">⌑</span><p>Vos suivis restent privés et sont enregistrés uniquement sur cet appareil.</p></div>
           <a class="sidebar-help" href="https://parcelsapp.com/tracking-widget" target="_blank" rel="noopener noreferrer">À propos de Parcel App <span aria-hidden="true">↗</span></a>
         </div>
       </aside>
@@ -69,18 +90,20 @@
             <span class="clock-icon" aria-hidden="true">◷</span>
             <div><p class="eyebrow">HEURE MONDIALE</p><h2>Le monde en temps réel</h2></div>
           </div>
-          <div class="clock-list">
-            <div class="clock-item"><span>Votre heure locale</span><time id="local-clock">--:--:--</time><small id="local-timezone">Fuseau de l’appareil</small></div>
-            <div class="clock-item"><span>Temps universel</span><time id="utc-clock">--:--:--</time><small>UTC</small></div>
-            <div class="clock-item"><span>Tokyo</span><time id="tokyo-clock">--:--:--</time><small>Japon</small></div>
-            <div class="clock-item"><span>New York</span><time id="new-york-clock">--:--:--</time><small>États-Unis</small></div>
-          </div>
+          <div class="clock-list" id="clock-list" aria-live="off"></div>
+          <form class="clock-add-form" id="clock-add-form">
+            <label class="visually-hidden" for="clock-timezone-input">Ville ou fuseau horaire IANA</label>
+            <input id="clock-timezone-input" type="search" list="clock-timezone-options" autocomplete="off" placeholder="Ajouter une ville ou un fuseau (ex. Asia/Dubai)" required>
+            <datalist id="clock-timezone-options"></datalist>
+            <button type="submit">Ajouter un fuseau</button>
+          </form>
+          <p class="clock-message" id="clock-message" aria-live="polite">Ajoutez des villes pour suivre l’heure locale de vos colis.</p>
           <div class="live-news" aria-labelledby="live-news-title">
             <h2 class="live-news-title" id="live-news-title"><span class="live-news-dot" aria-hidden="true"></span>À LA UNE</h2>
             <div class="live-news-items" id="live-news-items" aria-live="polite">
               <p class="live-news-message">Chargement des actualités…</p>
             </div>
-            <p class="live-news-source">Titres de franceinfo · actualisation toutes les 10 minutes</p>
+            <p class="live-news-source">6 derniers titres de franceinfo · actualisés toutes les 10 minutes <span id="live-news-updated" aria-live="polite"></span></p>
           </div>
         </section>
 
@@ -92,18 +115,36 @@
             </div>
             <p class="weather-description" id="weather-description">Recherchez une ville ou affichez la météo près de vous.</p>
             <output class="weather-result" id="weather-result" aria-live="polite">La météo du lieu sélectionné s’affichera ici.</output>
-            <form class="destination-weather-form" id="destination-weather-form">
-              <label class="visually-hidden" for="destination-location">Ville ou pays</label>
-              <input id="destination-location" name="destination" type="search" autocomplete="off" maxlength="100" placeholder="Ex. Paris, France ou Japon" required>
-              <button type="submit">Rechercher</button>
-            </form>
-            <button class="weather-button" id="weather-button" type="button">Utiliser ma position <span aria-hidden="true">→</span></button>
+            <div class="weather-search-actions">
+              <form class="destination-weather-form" id="destination-weather-form">
+                <label class="visually-hidden" for="destination-location">Ville ou pays</label>
+                <input id="destination-location" name="destination" type="search" autocomplete="off" maxlength="100" placeholder="Ex. Paris, France ou Japon" required>
+                <button type="submit">Rechercher</button>
+              </form>
+              <button class="weather-button" id="weather-button" type="button">Utiliser ma position <span aria-hidden="true">→</span></button>
+            </div>
+          </div>
+          <div class="weather-map-controls">
+            <label for="weather-map-layer">Indicateur météo Windy</label>
+            <select id="weather-map-layer">
+              <option value="rain">Pluie et tonnerre</option>
+              <option value="radar">Radar pluie</option>
+              <option value="satellite">Satellite</option>
+              <option value="wind">Vent</option>
+              <option value="temp">Température</option>
+              <option value="hurricanes">Cyclones</option>
+              <option value="clouds">Nuages</option>
+              <option value="waves">Vagues</option>
+              <option value="snowcover">Accumulation de neige</option>
+              <option value="thunder">Orages</option>
+              <option value="wind:850h">Vent en altitude (850 hPa)</option>
+            </select>
           </div>
           <iframe
             class="weather-map-frame"
             id="weather-map"
             title="Carte météorologique interactive Windy, centrée sur le lieu sélectionné"
-            src="https://embed.windy.com/embed.html?type=map&amp;location=coordinates&amp;metricRain=default&amp;metricTemp=default&amp;metricWind=default&amp;zoom=5&amp;overlay=rain&amp;product=ecmwf&amp;level=surface&amp;lat=46.6&amp;lon=2.4&amp;detailLat=46.6&amp;detailLon=2.4&amp;lang=fr"
+            src="https://embed.windy.com/embed.html?type=map&amp;location=coordinates&amp;metricRain=default&amp;metricTemp=default&amp;metricWind=default&amp;zoom=2&amp;overlay=rain&amp;product=ecmwf&amp;level=surface&amp;lat=46.6&amp;lon=2.4&amp;detailLat=46.6&amp;detailLon=2.4&amp;lang=fr"
             loading="lazy"
             referrerpolicy="strict-origin-when-cross-origin"
             allowfullscreen></iframe>
@@ -124,7 +165,13 @@
         <section class="panel shipments-panel" id="mes-colis" aria-labelledby="shipments-title">
           <div class="panel-heading">
             <div><p class="eyebrow">VOTRE PETIT CARNET</p><h2 id="shipments-title">Mes colis <span class="count-badge" id="shipment-count">0</span></h2></div>
-            <span class="heading-decoration" aria-hidden="true">✳</span>
+            <label class="shipment-sort-label" for="shipment-sort-order">
+              <span class="visually-hidden">Trier les colis</span>
+              <select id="shipment-sort-order" aria-label="Trier les colis par date de suivi">
+                <option value="newest">Suivi le plus récent</option>
+                <option value="oldest">Suivi le plus ancien</option>
+              </select>
+            </label>
           </div>
           <div class="shipment-list" id="shipment-list"></div>
           <div class="empty-state" id="empty-state">
@@ -142,29 +189,68 @@
           </div>
           <div class="tracking-layout">
             <div class="tracking-info">
-              <div class="tracking-summary" id="tracking-summary" aria-live="polite">
-                <p class="tracking-summary-message">Ajoutez ou sélectionnez un colis pour afficher ses étapes de suivi.</p>
-              </div>
-              <ol class="tracking-events" id="tracking-events" aria-label="Historique des événements du colis"></ol>
-              <details class="parcel-widget-details" id="parcel-widget-details" hidden>
-                <summary>Afficher les étapes complètes de Parcel App</summary>
-                <div class="parcel-widget-frame">
-                  <iframe
-                    id="parcels-widget"
-                    title="Étapes détaillées du colis sur Parcel App"
-                    loading="lazy"
-                    referrerpolicy="strict-origin-when-cross-origin"
-                    allow="clipboard-read; clipboard-write"></iframe>
+              <section class="tracking-details-card" aria-label="Détails du suivi sélectionné">
+                <div class="tracking-summary" id="tracking-summary" aria-live="polite">
+                  <p class="tracking-summary-message">Ajoutez ou sélectionnez un colis pour afficher ses étapes de suivi.</p>
                 </div>
-              </details>
-              <form class="tracking-country-form" id="tracking-country-form" hidden>
-                <p>Impossible d’associer ce numéro à un envoi. Indiquez ou corrigez le pays de destination, nécessaire pour certains transporteurs, puis relancez la recherche.</p>
-                <label class="visually-hidden" for="tracking-destination-country">Pays de destination</label>
-                <input id="tracking-destination-country" type="text" autocomplete="country-name" maxlength="100" placeholder="Pays de destination (ex. France ou FR)" required>
-                <button type="submit">Réessayer le suivi</button>
-              </form>
-              <p class="widget-caption">Étapes communiquées par le transporteur via Parcels. Les lieux et horaires dépendent des informations disponibles.</p>
-              <a class="external-link" id="parcel-tracking-link" href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">Ouvrir la fiche Parcel App <span aria-hidden="true">↗</span></a>
+                <section class="delivery-countdown" id="delivery-countdown-card" aria-labelledby="delivery-countdown-title">
+                  <div class="delivery-countdown-heading">
+                    <span class="delivery-countdown-icon" aria-hidden="true">◷</span>
+                    <div>
+                      <h3 id="delivery-countdown-title">Arrivée estimée</h3>
+                      <span class="delivery-countdown-confidence" id="delivery-countdown-confidence" hidden></span>
+                    </div>
+                  </div>
+                  <strong class="delivery-countdown-time" id="delivery-countdown-time">Sélectionnez un colis pour afficher une estimation.</strong>
+                  <p class="delivery-countdown-window" id="delivery-countdown-window"></p>
+                  <p class="delivery-countdown-note" id="delivery-countdown-note">Estimation indicative, affichée dans le fuseau horaire de votre appareil.</p>
+                </section>
+                <div class="tracking-translation-controls" id="tracking-translation-controls" hidden>
+                  <label class="tracking-translation-label" for="tracking-translation-language">Traduire en</label>
+                  <select class="tracking-translation-language" id="tracking-translation-language">
+                    <option value="fr">Français</option>
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="de">Deutsch</option>
+                    <option value="it">Italiano</option>
+                    <option value="pt">Português</option>
+                    <option value="nl">Nederlands</option>
+                  </select>
+                  <button class="tracking-translation-toggle" id="tracking-translation-toggle" type="button">Afficher le texte original</button>
+                </div>
+                <p class="tracking-translation-message" id="tracking-translation-message" aria-live="polite" hidden></p>
+                <ol class="tracking-events" id="tracking-events" aria-label="Historique des événements du colis"></ol>
+                <details class="parcel-widget-details" id="parcel-widget-details" hidden>
+                  <summary>Afficher les étapes complètes de Parcel App</summary>
+                  <div class="parcel-widget-frame">
+                    <iframe
+                      id="parcels-widget"
+                      title="Étapes détaillées du colis sur Parcel App"
+                      loading="lazy"
+                      referrerpolicy="strict-origin-when-cross-origin"
+                      allow="clipboard-read; clipboard-write"></iframe>
+                  </div>
+                </details>
+                <form class="tracking-country-form" id="tracking-country-form" hidden>
+                  <p>Parcels n’a pas encore identifié ce colis. Choisissez le transporteur, ajoutez si besoin le pays et les informations demandées par celui-ci, puis relancez la recherche.</p>
+                  <label class="visually-hidden" for="tracking-destination-country">Pays de destination</label>
+                  <input id="tracking-destination-country" type="text" autocomplete="country-name" maxlength="100" placeholder="Pays de destination (ex. France ou FR)">
+                  <label class="visually-hidden" for="tracking-carrier-search">Rechercher un transporteur</label>
+                  <input id="tracking-carrier-search" type="search" autocomplete="off" maxlength="100" placeholder="Rechercher un transporteur (ex. La Poste)">
+                  <label class="visually-hidden" for="tracking-carrier-select">Transporteur à utiliser</label>
+                  <select id="tracking-carrier-select" disabled>
+                    <option value="">Choisissez un transporteur après la recherche</option>
+                  </select>
+                  <input id="tracking-recipient-postal-code" type="text" autocomplete="postal-code" maxlength="32" placeholder="Code postal du destinataire (si demandé)" hidden>
+                  <input id="tracking-recipient-email" type="email" autocomplete="email" maxlength="254" placeholder="E-mail du destinataire (si demandé)" hidden>
+                  <input id="tracking-recipient-phone" type="tel" autocomplete="tel" maxlength="40" placeholder="Téléphone du destinataire (si demandé)" hidden>
+                  <p class="tracking-carrier-message" id="tracking-carrier-message" aria-live="polite">Choisissez le transporteur, ou indiquez le pays de destination. Certains transporteurs demandent aussi les informations du destinataire.</p>
+                  <button type="submit">Réessayer le suivi</button>
+                </form>
+                <p class="widget-caption">Étapes communiquées par le transporteur via Parcels. Les lieux et horaires dépendent des informations disponibles.</p>
+                <a class="external-link" id="parcel-tracking-link" href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">Ouvrir la fiche Parcel App <span aria-hidden="true">↗</span></a>
+                <a class="external-link" id="track17-tracking-link" href="https://t.17track.net/en" target="_blank" rel="noopener noreferrer">Ouvrir le suivi 17TRACK <span aria-hidden="true">↗</span></a>
+              </section>
             </div>
             <section class="parcel-route" aria-labelledby="parcel-route-title">
               <div class="parcel-route-heading">
@@ -182,7 +268,8 @@
                 <button type="submit">Afficher le trajet <span aria-hidden="true">→</span></button>
               </form>
               <output class="parcel-route-result" id="parcel-route-result" aria-live="polite"></output>
-              <div class="map-frame" id="parcel-map" role="region" aria-label="Globe interactif du trajet du colis"></div>
+              <p class="day-night-caption"><span aria-hidden="true"></span> Zone ombrée : nuit · calculée en temps réel</p>
+              <div class="map-frame" id="parcel-map" role="region" aria-label="Globe interactif du trajet du colis avec la zone de nuit en temps réel. Faites défiler à deux doigts sur le pavé tactile pour zoomer ; cliquez sur la destination ou double-cliquez sur l’origine pour l’afficher à l’échelle de la rue."></div>
             </section>
           </div>
         </section>
@@ -190,5 +277,8 @@
         <footer class="footer"><span>Fait avec soin, pour les jours de livraison <span class="footer-heart">♥</span></span><span>Suivi fourni par <a href="https://parcelsapp.com/" target="_blank" rel="noopener noreferrer">parcelsapp.com</a></span></footer>
       </main>
     </div>
+    <button class="back-to-top" id="back-to-top" type="button" aria-label="Retourner en haut de la page" title="Retour en haut" hidden>
+      <span aria-hidden="true">↑</span>
+    </button>
   </body>
 </html>

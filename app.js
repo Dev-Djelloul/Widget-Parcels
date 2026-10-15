@@ -3,103 +3,412 @@ import { Map as MapLibreMap, Marker, NavigationControl, Popup } from './vendor/m
 const STORAGE_KEY = 'colis-saved-trackings';
 const THEME_KEY = 'colis-theme';
 const SIDEBAR_KEY = 'colis-sidebar-collapsed';
+const WORLD_CLOCKS_KEY = 'colis-world-clock-timezones';
 const form = document.querySelector('#add-form');
 const input = document.querySelector('#tracking-input');
 const formMessage = document.querySelector('#form-message');
 const shipmentList = document.querySelector('#shipment-list');
 const shipmentCount = document.querySelector('#shipment-count');
+const shipmentSortOrder = document.querySelector('#shipment-sort-order');
 const emptyState = document.querySelector('#empty-state');
 const parcelTrackingLink = document.querySelector('#parcel-tracking-link');
+const track17TrackingLink = document.querySelector('#track17-tracking-link');
 const trackingSummary = document.querySelector('#tracking-summary');
 const trackingEvents = document.querySelector('#tracking-events');
+const trackingTranslationToggle = document.querySelector('#tracking-translation-toggle');
+const trackingTranslationControls = document.querySelector('#tracking-translation-controls');
+const trackingTranslationLanguage = document.querySelector('#tracking-translation-language');
+const trackingTranslationMessage = document.querySelector('#tracking-translation-message');
+const deliveryCountdownTime = document.querySelector('#delivery-countdown-time');
+const deliveryCountdownWindow = document.querySelector('#delivery-countdown-window');
+const deliveryCountdownNote = document.querySelector('#delivery-countdown-note');
+const deliveryCountdownConfidence = document.querySelector('#delivery-countdown-confidence');
 const parcelWidgetDetails = document.querySelector('#parcel-widget-details');
 const parcelWidget = document.querySelector('#parcels-widget');
 const trackingCountryForm = document.querySelector('#tracking-country-form');
 const trackingDestinationCountry = document.querySelector('#tracking-destination-country');
+const trackingCarrierSearch = document.querySelector('#tracking-carrier-search');
+const trackingCarrierSelect = document.querySelector('#tracking-carrier-select');
+const trackingCarrierMessage = document.querySelector('#tracking-carrier-message');
+const trackingRecipientPostalCode = document.querySelector('#tracking-recipient-postal-code');
+const trackingRecipientEmail = document.querySelector('#tracking-recipient-email');
+const trackingRecipientPhone = document.querySelector('#tracking-recipient-phone');
 const weatherButton = document.querySelector('#weather-button');
 const weatherResult = document.querySelector('#weather-result');
 const weatherDescription = document.querySelector('#weather-description');
 const weatherMap = document.querySelector('#weather-map');
+const weatherMapLayer = document.querySelector('#weather-map-layer');
 const sidebarToggle = document.querySelector('#sidebar-toggle');
+const backToTop = document.querySelector('#back-to-top');
 const installButton = document.querySelector('#install-button');
+const sidebarShipmentCount = document.querySelector('#sidebar-shipment-count');
+const sidebarCurrentParcel = document.querySelector('#sidebar-current-parcel');
+const sidebarParcelIcon = document.querySelector('#sidebar-parcel-icon');
+const sidebarParcelCarrier = document.querySelector('#sidebar-parcel-carrier');
+const sidebarParcelNumber = document.querySelector('#sidebar-parcel-number');
+const sidebarParcelStatus = document.querySelector('#sidebar-parcel-status');
 const mobileMenuQuery = window.matchMedia('(max-width: 760px)');
+const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 let installPrompt;
 let shipments = loadShipments();
 let selectedTracking = shipments[0]?.number ?? '';
+let shipmentSort = 'newest';
+try {
+  const savedShipmentSort = localStorage.getItem('colis-shipment-sort');
+  if (savedShipmentSort === 'oldest' || savedShipmentSort === 'newest') shipmentSort = savedShipmentSort;
+} catch (error) {
+  console.warn('Impossible de lire le tri des colis enregistré.', error);
+}
+shipmentSortOrder.value = shipmentSort;
 let weatherCoordinates;
+let weatherMapCoordinates = { latitude: 46.6, longitude: 2.4 };
+let trackingTranslationEnabled = true;
+let carrierSearchTimeout;
+let carrierSearchSequence = 0;
+let trackingCarrierSelectionFor = '';
+let editingCarrierShipment = '';
+const carrierInputRequirements = new Map();
+const trackingTranslations = new Map();
+const trackingTranslationJobs = new Set();
+const deliveryEstimateRequests = new Set();
 
-const worldClocks = [
-  { id: 'local-clock', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-  { id: 'utc-clock', timeZone: 'UTC' },
-  { id: 'tokyo-clock', timeZone: 'Asia/Tokyo' },
-  { id: 'new-york-clock', timeZone: 'America/New_York' }
-];
-document.querySelector('#local-timezone').textContent =
-  (worldClocks[0].timeZone ?? 'UTC').replaceAll('_', ' ');
+function updateBackToTopVisibility() {
+  backToTop.hidden = window.scrollY < 500;
+}
+
+window.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
+backToTop.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: reducedMotionQuery.matches ? 'auto' : 'smooth' });
+});
+updateBackToTopVisibility();
+
+const clockList = document.querySelector('#clock-list');
+const clockAddForm = document.querySelector('#clock-add-form');
+const clockTimezoneInput = document.querySelector('#clock-timezone-input');
+const clockTimezoneOptions = document.querySelector('#clock-timezone-options');
+const clockMessage = document.querySelector('#clock-message');
+const localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+const availableTimeZones = typeof Intl.supportedValuesOf === 'function'
+  ? Intl.supportedValuesOf('timeZone')
+  : [
+    'Africa/Cairo', 'Africa/Johannesburg', 'America/Anchorage', 'America/Argentina/Buenos_Aires',
+    'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Mexico_City',
+    'America/New_York', 'America/Sao_Paulo', 'Asia/Bangkok', 'Asia/Dubai', 'Asia/Hong_Kong',
+    'Asia/Jakarta', 'Asia/Kolkata', 'Asia/Seoul', 'Asia/Shanghai', 'Asia/Singapore',
+    'Asia/Tokyo', 'Australia/Melbourne', 'Australia/Sydney', 'Europe/Berlin', 'Europe/London',
+    'Europe/Madrid', 'Europe/Paris', 'Europe/Rome', 'Pacific/Auckland', 'UTC'
+  ];
+const zoneLabel = timeZone => timeZone === localTimeZone
+  ? 'Votre heure locale'
+  : timeZone.split('/').at(-1).replaceAll('_', ' ');
+function formatZoneDetails(timeZone, date = new Date()) {
+  const offset = new Intl.DateTimeFormat('fr-FR', {
+    timeZone,
+    timeZoneName: 'shortOffset'
+  }).formatToParts(date).find(part => part.type === 'timeZoneName')?.value;
+  return `${timeZone.replaceAll('_', ' ')}${offset ? ` · ${offset}` : ''}`;
+}
+
+function loadWorldClockZones() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WORLD_CLOCKS_KEY) ?? 'null');
+    if (Array.isArray(saved)) {
+      return saved.filter((zone, index) =>
+        typeof zone === 'string' && zone !== localTimeZone && zone !== 'UTC' &&
+        availableTimeZones.includes(zone) && saved.indexOf(zone) === index
+      );
+    }
+  } catch (error) {
+    console.error('Impossible de lire les fuseaux horaires enregistrés.', error);
+  }
+  return ['Asia/Tokyo', 'America/New_York'];
+}
+
+let extraClockZones = loadWorldClockZones();
+const worldClocks = [];
+let worldClockTimer;
+
+function saveWorldClockZones() {
+  try {
+    localStorage.setItem(WORLD_CLOCKS_KEY, JSON.stringify(extraClockZones));
+    clockMessage.textContent = 'Ajoutez une ville ou un fuseau pour suivre l’heure locale de vos colis.';
+  } catch (error) {
+    clockMessage.textContent = 'Le fuseau est affiché, mais n’a pas pu être enregistré sur cet appareil.';
+    console.error('Impossible d’enregistrer les fuseaux horaires.', error);
+  }
+}
+
+function addWorldClock(timeZone, { persist = true } = {}) {
+  const item = document.createElement('article');
+  item.className = 'clock-item';
+  const label = document.createElement('span');
+  label.textContent = zoneLabel(timeZone);
+  const time = document.createElement('time');
+  time.dateTime = new Date().toISOString();
+  const zone = document.createElement('small');
+  zone.textContent = formatZoneDetails(timeZone);
+  const remove = document.createElement('button');
+  remove.className = 'clock-remove';
+  remove.type = 'button';
+  remove.setAttribute('aria-label', `Retirer l’horloge ${zoneLabel(timeZone)}`);
+  remove.title = `Retirer ${zoneLabel(timeZone)}`;
+  remove.textContent = '×';
+  remove.addEventListener('click', () => {
+    extraClockZones = extraClockZones.filter(savedZone => savedZone !== timeZone);
+    worldClocks.splice(worldClocks.indexOf(clock), 1);
+    item.remove();
+    saveWorldClockZones();
+    startWorldClockTimer();
+  });
+  item.append(label, time, zone, remove);
+  clockList.append(item);
+  const clock = { timeZone, timeElement: time, zoneElement: zone };
+  worldClocks.push(clock);
+  updateWorldClocks();
+  startWorldClockTimer();
+  if (persist) saveWorldClockZones();
+}
+
+function renderWorldClocks() {
+  const pinned = [
+    { timeZone: localTimeZone, label: 'Votre heure locale', zone: localTimeZone },
+    { timeZone: 'UTC', label: 'Temps universel', zone: 'UTC' }
+  ];
+  for (const { timeZone, label, zone } of pinned) {
+    const item = document.createElement('article');
+    item.className = 'clock-item is-pinned';
+    const title = document.createElement('span');
+    title.textContent = label;
+    const time = document.createElement('time');
+    time.dateTime = new Date().toISOString();
+    const details = document.createElement('small');
+    details.textContent = formatZoneDetails(timeZone);
+    item.append(title, time, details);
+    clockList.append(item);
+    worldClocks.push({ timeZone, timeElement: time, zoneElement: details });
+  }
+  for (const timeZone of extraClockZones) addWorldClock(timeZone, { persist: false });
+  clockTimezoneOptions.replaceChildren(...availableTimeZones.map(timeZone => {
+    const option = document.createElement('option');
+    option.value = timeZone;
+    option.label = timeZone.split('/').at(-1).replaceAll('_', ' ');
+    return option;
+  }));
+}
+
 function updateWorldClocks() {
   const now = new Date();
   for (const clock of worldClocks) {
-    document.getElementById(clock.id).textContent = new Intl.DateTimeFormat('fr-FR', {
+    clock.timeElement.textContent = new Intl.DateTimeFormat('fr-FR', {
       timeZone: clock.timeZone,
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit',
+      ...(worldClocks.length <= 12 ? { second: '2-digit' } : {}),
       hourCycle: 'h23'
     }).format(now);
+    clock.timeElement.dateTime = now.toISOString();
+    clock.zoneElement.textContent = formatZoneDetails(clock.timeZone, now);
   }
 }
+
+function startWorldClockTimer() {
+  window.clearInterval(worldClockTimer);
+  worldClockTimer = window.setInterval(updateWorldClocks, worldClocks.length <= 12 ? 1000 : 60_000);
+}
+renderWorldClocks();
 updateWorldClocks();
-window.setInterval(updateWorldClocks, 1000);
+startWorldClockTimer();
+
+clockAddForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const timeZone = clockTimezoneInput.value.trim();
+  try {
+    new Intl.DateTimeFormat('fr-FR', { timeZone });
+  } catch {
+    clockMessage.textContent = 'Fuseau inconnu. Choisissez une ville proposée, par exemple Asia/Dubai.';
+    clockTimezoneInput.focus();
+    return;
+  }
+  if (timeZone === localTimeZone || worldClocks.some(clock => clock.timeZone === timeZone)) {
+    clockMessage.textContent = 'Cette horloge est déjà affichée.';
+    return;
+  }
+  if (!availableTimeZones.includes(timeZone) && timeZone !== 'UTC') {
+    clockMessage.textContent = 'Choisissez un fuseau IANA proposé dans la liste.';
+    return;
+  }
+  extraClockZones.push(timeZone);
+  addWorldClock(timeZone);
+  clockTimezoneInput.value = '';
+  clockTimezoneInput.focus();
+});
 
 const liveNewsItems = document.querySelector('#live-news-items');
+const liveNewsUpdated = document.querySelector('#live-news-updated');
+let newsRefreshInProgress = false;
+
 function showNewsMessage(message, isError = false) {
   const paragraph = document.createElement('p');
   paragraph.className = 'live-news-message';
   paragraph.textContent = message;
-  liveNewsItems.replaceChildren(paragraph);
+  if (liveNewsItems.querySelector('.live-news-item')) {
+    liveNewsUpdated.textContent = ` · ${message}`;
+  } else {
+    liveNewsItems.replaceChildren(paragraph);
+  }
   if (isError) console.error(message);
 }
 
-async function refreshNews() {
+function safeNewsUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return '';
   try {
-    const endpoint = new URL('https://api.rss2json.com/v1/api.json');
-    endpoint.searchParams.set('rss_url', 'https://www.franceinfo.fr/titres.rss');
-    const response = await fetch(endpoint, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Actualités indisponibles (${response.status}).`);
-    const feed = await response.json();
-    if (feed.status !== 'ok' || !Array.isArray(feed.items)) {
-      throw new Error('Le flux des actualités est temporairement indisponible.');
+    const url = new URL(value.trim(), 'https://www.franceinfo.fr');
+    return url.protocol === 'https:' ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function getNewsImage(item) {
+  const imageElements = [
+    ...item.getElementsByTagName('media:content'),
+    ...item.getElementsByTagName('media:thumbnail'),
+    ...item.getElementsByTagName('enclosure')
+  ];
+  const imageUrl = imageElements
+    .filter(element => {
+      const type = element.getAttribute('type');
+      const url = element.getAttribute('url') || element.getAttribute('href') || '';
+      return type?.startsWith('image/') || /\.(?:avif|gif|jpe?g|png|webp)(?:[?#]|$)/i.test(url);
+    })
+    .map(element => element.getAttribute('url') || element.getAttribute('href'))
+    .map(safeNewsUrl)
+    .find(Boolean);
+  if (imageUrl) return imageUrl;
+
+  const description = item.getElementsByTagName('description')[0]?.textContent ?? '';
+  const descriptionDocument = new DOMParser().parseFromString(description, 'text/html');
+  return safeNewsUrl(descriptionDocument.querySelector('img')?.getAttribute('src'));
+}
+
+function createNewsCard({ title, href, imageUrl, published }) {
+  title = typeof title === 'string' ? title.trim() : '';
+  href = safeNewsUrl(href);
+  imageUrl = safeNewsUrl(imageUrl);
+  if (!title || !href) return null;
+
+  const link = document.createElement('a');
+  link.className = 'live-news-item';
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.setAttribute('aria-label', `Lire l’article : ${title}`);
+
+  if (imageUrl) {
+    const image = document.createElement('img');
+    image.className = 'live-news-image';
+    image.src = imageUrl;
+    image.alt = '';
+    image.loading = 'lazy';
+    image.decoding = 'async';
+    image.referrerPolicy = 'no-referrer';
+    image.addEventListener('error', () => {
+      image.remove();
+      link.classList.add('live-news-no-image');
+    }, { once: true });
+    link.append(image);
+  } else {
+    link.classList.add('live-news-no-image');
+  }
+
+  const content = document.createElement('span');
+  content.className = 'live-news-content';
+  const headline = document.createElement('strong');
+  headline.textContent = title;
+  content.append(headline);
+  if (published && Number.isFinite(Date.parse(published))) {
+    const time = document.createElement('time');
+    time.dateTime = new Date(published).toISOString();
+    time.textContent = new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(published));
+    content.append(time);
+  }
+  link.append(content);
+  return link;
+}
+
+async function refreshNews() {
+  if (newsRefreshInProgress || document.hidden) return;
+  newsRefreshInProgress = true;
+  try {
+    let response;
+    let directFeedError;
+    try {
+      response = await fetch('https://www.franceinfo.fr/titres.rss', {
+        cache: 'no-store',
+        headers: { Accept: 'application/rss+xml, application/xml, text/xml' }
+      });
+      if (!response.ok) directFeedError = new Error(`Flux franceinfo indisponible (${response.status}).`);
+    } catch (error) {
+      directFeedError = error;
     }
-    const links = feed.items.slice(0, 3).map(article => {
-      const title = typeof article.title === 'string' ? article.title.trim() : '';
-      const href = typeof article.link === 'string' ? article.link.trim() : '';
-      if (!title || !href) return null;
-      let url;
-      try {
-        url = new URL(href);
-      } catch {
-        return null;
-      }
-      if (url.protocol !== 'https:') return null;
-      const link = document.createElement('a');
-      link.className = 'live-news-item';
-      link.href = url.toString();
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = title;
-      return link;
-    }).filter(Boolean);
-    if (links.length === 0) throw new Error('Aucun titre d’actualité disponible.');
-    liveNewsItems.replaceChildren(...links);
+    if (!response?.ok) {
+      console.warn('Franceinfo RSS direct fetch unavailable; using rss2json fallback.', directFeedError);
+      const fallbackEndpoint = new URL('https://api.rss2json.com/v1/api.json');
+      fallbackEndpoint.searchParams.set('rss_url', 'https://www.franceinfo.fr/titres.rss');
+      response = await fetch(fallbackEndpoint, { cache: 'no-store' });
+    }
+    if (!response.ok) throw new Error(`Actualités indisponibles (${response.status}).`);
+    let cards;
+    if (response.headers.get('content-type')?.includes('application/json')) {
+      const feed = await response.json();
+      if (feed.status && feed.status !== 'ok') throw new Error('Le flux des actualités est temporairement indisponible.');
+      cards = (Array.isArray(feed.items) ? feed.items : []).slice(0, 6).map(article => {
+        const enclosure = Array.isArray(article.enclosure)
+          ? article.enclosure.find(item => item?.type?.startsWith('image/'))
+          : article.enclosure;
+        const description = typeof article.content === 'string' ? article.content : article.description;
+        const descriptionDocument = new DOMParser().parseFromString(description ?? '', 'text/html');
+        return createNewsCard({
+          title: article.title,
+          href: article.link,
+          imageUrl: article.thumbnail || enclosure?.link || descriptionDocument.querySelector('img')?.getAttribute('src'),
+          published: article.pubDate
+        });
+      }).filter(Boolean);
+    } else {
+      const xml = await response.text();
+      const feed = new DOMParser().parseFromString(xml, 'application/xml');
+      if (feed.querySelector('parsererror')) throw new Error('Le flux des actualités contient un format invalide.');
+      cards = [...feed.getElementsByTagName('item')].slice(0, 6).map(item => createNewsCard({
+        title: item.getElementsByTagName('title')[0]?.textContent,
+        href: item.getElementsByTagName('link')[0]?.textContent,
+        imageUrl: getNewsImage(item),
+        published: item.getElementsByTagName('pubDate')[0]?.textContent?.trim()
+      })).filter(Boolean);
+    }
+    if (cards.length === 0) throw new Error('Aucun titre d’actualité disponible.');
+    liveNewsItems.replaceChildren(...cards);
+    liveNewsUpdated.textContent = ` · mis à jour à ${new Intl.DateTimeFormat('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date())}`;
   } catch (error) {
     showNewsMessage(error.message || 'Impossible de charger les actualités.', true);
+  } finally {
+    newsRefreshInProgress = false;
   }
 }
 
 refreshNews();
-window.setInterval(() => {
+window.setInterval(refreshNews, 600_000);
+document.addEventListener('visibilitychange', () => {
   if (!document.hidden) refreshNews();
-}, 600_000);
+});
 
 function loadShipments() {
   try {
@@ -188,6 +497,67 @@ document.querySelectorAll('.main-nav .nav-link').forEach(link => {
   });
 });
 
+const sectionNavigation = [...document.querySelectorAll('.main-nav .nav-link')];
+const navigationSections = sectionNavigation
+  .map(link => document.querySelector(link.getAttribute('href')))
+  .filter(Boolean);
+
+function setActiveNavigation(sectionId) {
+  for (const link of sectionNavigation) {
+    const isActive = link.hash === `#${sectionId}`;
+    link.classList.toggle('is-active', isActive);
+    if (isActive) link.setAttribute('aria-current', 'location');
+    else link.removeAttribute('aria-current');
+  }
+}
+
+if ('IntersectionObserver' in window) {
+  const navigationObserver = new IntersectionObserver(entries => {
+    const visible = entries
+      .filter(entry => entry.isIntersecting)
+      .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+    if (visible) setActiveNavigation(visible.target.id);
+  }, { rootMargin: '-20% 0px -65% 0px', threshold: [0, 0.2, 0.5, 1] });
+  navigationSections.forEach(section => navigationObserver.observe(section));
+}
+
+function renderSidebarCurrentParcel() {
+  sidebarShipmentCount.textContent = String(shipments.length);
+  const shipment = shipments.find(item => item.number === selectedTracking);
+  sidebarCurrentParcel.classList.toggle('is-empty', !shipment);
+  if (!shipment) {
+    delete sidebarCurrentParcel.dataset.tint;
+    sidebarParcelIcon.dataset.carrier = 'generic';
+    sidebarParcelIcon.textContent = 'PKG';
+    sidebarParcelCarrier.textContent = 'Aucun colis suivi';
+    sidebarParcelNumber.textContent = 'Ajoutez un colis pour commencer';
+    sidebarParcelStatus.textContent = 'Ajouter un colis';
+    sidebarCurrentParcel.href = '#add-form';
+    sidebarCurrentParcel.setAttribute('aria-label', 'Ajouter un colis à suivre');
+    return;
+  }
+
+  sidebarCurrentParcel.dataset.tint = String(getSortedShipments().indexOf(shipment) % 6);
+  const carrier = getShipmentCarrier(shipment);
+  const status = typeof shipment.tracking?.status === 'string' && shipment.tracking.status.trim()
+    ? shipment.tracking.status.trim()
+    : shipment.tracking?.error ? 'Suivi indisponible' : 'En attente du suivi';
+  renderCarrierIcon(sidebarParcelIcon, shipment, carrier);
+  sidebarParcelCarrier.textContent = shipment.name || carrier.label;
+  sidebarParcelNumber.textContent = shipment.name
+    ? `${carrier.label} · ${shipment.number}`
+    : shipment.number;
+  sidebarParcelStatus.replaceChildren();
+  const statusText = document.createElement('span');
+  statusText.textContent = trackingTranslationEnabled ? translateTrackingState(status) : status;
+  const arrow = document.createElement('span');
+  arrow.setAttribute('aria-hidden', 'true');
+  arrow.textContent = '→';
+  sidebarParcelStatus.append(statusText, arrow);
+  sidebarCurrentParcel.href = '#suivi';
+  sidebarCurrentParcel.setAttribute('aria-label', `Afficher le suivi du colis ${shipment.number} : ${status}`);
+}
+
 window.addEventListener('beforeinstallprompt', event => {
   event.preventDefault();
   installPrompt = event;
@@ -235,7 +605,6 @@ function detectCarrier(trackingNumber) {
     { id: 'royal-mail', label: 'Royal Mail', mark: 'RM', hint: true, matches: value => /^[A-Z]{2}\d{9}GB$/.test(value) },
     { id: 'postnl', label: 'PostNL', mark: 'postNL', hint: true, matches: value => /^[A-Z]{2}\d{9}NL$/.test(value) },
     { id: 'usps', label: 'USPS', mark: 'USPS', hint: true, matches: value => /^(?:92|93|94|95)\d{18,20}$/.test(value) },
-    { id: 'fedex', label: 'FedEx', mark: 'FedEx', hint: true, matches: value => /^\d{12}$|^\d{15}$|^\d{20}$|^\d{22}$/.test(value) },
     { id: 'canada-post', label: 'Canada Post', mark: 'CA', matches: value => /^[A-Z]{2}\d{9}CA$/.test(value) },
     { id: 'australia-post', label: 'Australia Post', mark: 'AU', matches: value => /^[A-Z]{2}\d{9}AU$/.test(value) },
     { id: 'china-post', label: 'China Post', mark: 'CN', matches: value => /^[A-Z]{2}\d{9}CN$/.test(value) },
@@ -277,10 +646,15 @@ function detectCarrier(trackingNumber) {
 
 function getShipmentCarrier(shipment) {
   const detected = detectCarrier(shipment.number);
-  const name = typeof shipment.tracking?.carrier === 'string' && shipment.tracking.carrier.trim()
+  const selectedCarrier = typeof shipment.carrierName === 'string' ? shipment.carrierName.trim() : '';
+  const storedCarrier = typeof shipment.tracking?.carrier === 'string'
     ? shipment.tracking.carrier.trim()
-    : detected.label;
-  if (!shipment.tracking?.carrier) return detected;
+    : '';
+  const staleNumericFedExGuess = /^\d+$/.test(shipment.number) &&
+    shipment.tracking?.error &&
+    /^fedex$/i.test(storedCarrier);
+  const name = selectedCarrier || (storedCarrier && !staleNumericFedExGuess ? storedCarrier : detected.label);
+  if (!shipment.tracking?.carrier && !selectedCarrier) return detected;
 
   const normalizedName = name.toLocaleLowerCase();
   const knownCarriers = [
@@ -302,6 +676,105 @@ function getShipmentCarrier(shipment) {
   };
 }
 
+const carrierLogoFiles = new Map([
+  ['aramex', 'aramex.svg'],
+  ['bpost', 'bpost.svg'],
+  ['budbee', 'budbee.svg'],
+  ['canadapost', 'canadapost_symbol.svg'],
+  ['chronopost', 'chronopost_symbol.svg'],
+  ['colissimo', 'colissimo_symbol.svg'],
+  ['correos', 'correos_symbol.svg'],
+  ['dao', 'dao.svg'],
+  ['dhl', 'dhl.svg'],
+  ['dhlecommerce', 'dhl.svg'],
+  ['dhlexpress', 'dhl.svg'],
+  ['dhlpaket', 'dhl.svg'],
+  ['dhlparcel', 'dhl.svg'],
+  ['dpd', 'dpd_symbol.svg'],
+  ['evri', 'evri.svg'],
+  ['fedex', 'fedex.svg'],
+  ['fedexground', 'fedex.svg'],
+  ['federalexpress', 'fedex.svg'],
+  ['gls', 'gls.svg'],
+  ['helthjem', 'helthjem.svg'],
+  ['instabox', 'instabox.svg'],
+  ['israelpost', 'israelpost.svg'],
+  ['laposte', 'laposte.svg'],
+  ['mondialrelay', 'mondialrelay_symbol.svg'],
+  ['naqel', 'naqelexpress.svg'],
+  ['naqelexpress', 'naqelexpress.svg'],
+  ['porterbuddy', 'porterbuddy.svg'],
+  ['posteitaliane', 'posteitaliane.svg'],
+  ['posten', 'posten.svg'],
+  ['postnl', 'postnl.svg'],
+  ['postnord', 'postnord.svg'],
+  ['royalmail', 'royalmail.svg'],
+  ['sendle', 'sendle.svg'],
+  ['smsa', 'smsaexpress.svg'],
+  ['smsaexpress', 'smsaexpress.svg'],
+  ['ups', 'ups.svg'],
+  ['usps', 'usps_symbol.svg']
+]);
+
+function normalizeCarrierLogoKey(value) {
+  return typeof value === 'string'
+    ? value.toLocaleLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]/g, '')
+    : '';
+}
+
+function renderCarrierIcon(element, shipment, carrier) {
+  element.replaceChildren();
+  element.dataset.carrier = carrier.id;
+  element.title = carrier.label;
+  element.setAttribute('role', 'img');
+  element.setAttribute('aria-label', `Transporteur : ${carrier.label}`);
+
+  const fallback = document.createElement('span');
+  fallback.className = 'carrier-icon-fallback';
+  fallback.textContent = carrier.mark;
+  element.append(fallback);
+
+  const logoKey = [
+    shipment.carrierHint,
+    shipment.tracking?.carrierSlug,
+    carrier.id,
+    carrier.label
+  ].map(normalizeCarrierLogoKey).find(key => carrierLogoFiles.has(key));
+  const logoFile = logoKey ? carrierLogoFiles.get(logoKey) : null;
+  if (!logoFile) return;
+
+  const logo = document.createElement('img');
+  logo.className = 'carrier-icon-logo';
+  logo.alt = '';
+  logo.loading = 'lazy';
+  logo.decoding = 'async';
+  logo.src = `./icons/carriers/${logoFile}`;
+  logo.addEventListener('load', () => { fallback.hidden = true; }, { once: true });
+  logo.addEventListener('error', () => { logo.remove(); }, { once: true });
+  element.append(logo);
+}
+
+function carrierTrackingUrl(carrierId, trackingNumber) {
+  const trackingPages = {
+    ups: ['https://www.ups.com/track', 'tracknum', { loc: 'en_US' }],
+    dhl: ['https://www.dhl.com/global-en/home/tracking.html', 'tracking-id'],
+    laposte: ['https://www.laposte.fr/outils/track-a-parcel', 'code'],
+    fedex: ['https://www.fedex.com/fedextrack/', 'trknbr'],
+    'royal-mail': ['https://www.royalmail.com/track-your-item', 'trackNumber'],
+    postnl: ['https://www.internationalparceltracking.com', 'B'],
+    usps: ['https://tools.usps.com/go/TrackConfirmAction', 'tLabels']
+  };
+  const page = trackingPages[carrierId];
+  if (!page) return null;
+  const [baseUrl, trackingParameter, extraParameters = {}] = page;
+  const url = new URL(baseUrl);
+  url.search = new URLSearchParams({
+    ...extraParameters,
+    [trackingParameter]: trackingNumber
+  }).toString();
+  return url.toString();
+}
+
 function setOutboundLinkBehavior(link) {
   if (!(link instanceof HTMLAnchorElement) || !link.href) return;
   try {
@@ -312,6 +785,86 @@ function setOutboundLinkBehavior(link) {
     console.warn('Lien externe ignoré : adresse invalide.');
   }
 }
+
+function resetCarrierSearch() {
+  window.clearTimeout(carrierSearchTimeout);
+  carrierSearchSequence += 1;
+  trackingCarrierSearch.value = '';
+  trackingCarrierSelect.replaceChildren(new Option('Choisissez un transporteur après la recherche', ''));
+  trackingCarrierSelect.disabled = true;
+  carrierInputRequirements.clear();
+  trackingRecipientPostalCode.value = '';
+  trackingRecipientEmail.value = '';
+  trackingRecipientPhone.value = '';
+  trackingRecipientPostalCode.hidden = true;
+  trackingRecipientEmail.hidden = true;
+  trackingRecipientPhone.hidden = true;
+  trackingCarrierMessage.textContent = 'Choisissez le transporteur, ou indiquez le pays de destination.';
+}
+
+trackingCarrierSearch.addEventListener('input', () => {
+  window.clearTimeout(carrierSearchTimeout);
+  const query = trackingCarrierSearch.value.trim();
+  const sequence = ++carrierSearchSequence;
+  trackingCarrierSelect.replaceChildren(new Option('Recherche des transporteurs…', ''));
+  trackingCarrierSelect.disabled = true;
+
+  if (query.length < 2) {
+    trackingCarrierSelect.replaceChildren(new Option('Choisissez un transporteur après la recherche', ''));
+    trackingCarrierMessage.textContent = 'Saisissez au moins 2 caractères pour rechercher un transporteur.';
+    return;
+  }
+
+  trackingCarrierMessage.textContent = 'Recherche dans le catalogue Parcels…';
+  carrierSearchTimeout = window.setTimeout(async () => {
+    try {
+      const response = await fetch(`/api/carriers?${new URLSearchParams({ query })}`, { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Le catalogue des transporteurs est indisponible.');
+      if (sequence !== carrierSearchSequence) return;
+
+      const carriers = Array.isArray(data.carriers) ? data.carriers : [];
+      carrierInputRequirements.clear();
+      for (const carrier of carriers) {
+        if (carrier?.slug && carrier.inputRequirements) {
+          carrierInputRequirements.set(carrier.slug, carrier.inputRequirements);
+        }
+      }
+      trackingCarrierSelect.replaceChildren(
+        new Option(
+          carriers.length ? 'Sélectionnez le transporteur correspondant' : 'Aucun transporteur trouvé',
+          ''
+        ),
+        ...carriers.map(carrier => new Option(carrier.name, carrier.slug))
+      );
+      trackingCarrierSelect.disabled = carriers.length === 0;
+      trackingCarrierMessage.textContent = carriers.length
+        ? `${carriers.length} transporteur${carriers.length > 1 ? 's' : ''} trouvé${carriers.length > 1 ? 's' : ''}. Sélectionnez celui indiqué par le vendeur ou le suivi officiel.`
+        : 'Aucun résultat. Essayez un autre nom ou indiquez le pays de destination.';
+    } catch (error) {
+      if (sequence !== carrierSearchSequence) return;
+      trackingCarrierSelect.replaceChildren(new Option('Recherche indisponible', ''));
+      trackingCarrierMessage.textContent = error.message || 'La recherche de transporteur a échoué.';
+    }
+  }, 300);
+});
+
+trackingCarrierSearch.addEventListener('keydown', event => {
+  if (event.key === 'Enter') event.preventDefault();
+});
+
+trackingCarrierSelect.addEventListener('change', () => {
+  const selectedCarrier = trackingCarrierSelect.selectedOptions[0];
+  const requirements = carrierInputRequirements.get(trackingCarrierSelect.value);
+  const requiredFields = Array.isArray(requirements?.required) ? requirements.required : [];
+  const optionalAlternatives = Array.isArray(requirements?.any_of) ? requirements.any_of : [];
+  trackingRecipientPostalCode.hidden = ![...requiredFields, ...optionalAlternatives].includes('postal_code');
+  trackingRecipientEmail.hidden = ![...requiredFields, ...optionalAlternatives].includes('email');
+  trackingRecipientPhone.hidden = ![...requiredFields, ...optionalAlternatives].includes('phone');
+  trackingCarrierMessage.textContent = selectedCarrier?.value
+    ? `${selectedCarrier.textContent} sera transmis à Parcels comme transporteur à rechercher.${requiredFields.length || optionalAlternatives.length ? ` Informations demandées : ${[...new Set([...requiredFields, ...optionalAlternatives])].join(', ')}.` : ''}`
+    : 'Choisissez le transporteur, ou indiquez le pays de destination.';
+});
 
 document.querySelectorAll('a[href]').forEach(setOutboundLinkBehavior);
 document.addEventListener('click', event => {
@@ -340,19 +893,432 @@ function updateParcelTrackingLink() {
   }
   if (selectedTracking) {
     parcelTrackingLink.href = `https://parcelsapp.com/en/tracking/${encodeURIComponent(selectedTracking)}`;
+    track17TrackingLink.href = `https://t.17track.net/en#nums=${encodeURIComponent(selectedTracking)}`;
   } else {
     parcelTrackingLink.href = 'https://parcelsapp.com/';
+    track17TrackingLink.href = 'https://t.17track.net/en';
   }
   setOutboundLinkBehavior(parcelTrackingLink);
+  setOutboundLinkBehavior(track17TrackingLink);
+}
+
+function translateTrackingState(state) {
+  const normalized = state.trim().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').toLocaleLowerCase('en').replace(/[.!?]+$/, '');
+  const translations = {
+    'la poste is ready to take care of your shipment. as soon as it is entrusted to us, you will be able to track its journey here': 'La Poste est prête à prendre en charge votre colis. Vous pourrez suivre son acheminement dès qu’il nous sera confié.',
+    'ready to take care of your shipment. as soon as it is entrusted to us, you will be able to track its journey here': 'Prise en charge en attente. Vous pourrez suivre le colis dès qu’il sera confié au transporteur.',
+    'shipment information received': 'Informations d’expédition reçues',
+    'we have received your shipment information': 'Nous avons reçu les informations d’expédition',
+    'the sender has provided shipment information': 'L’expéditeur a transmis les informations d’expédition',
+    'your parcel is on its way': 'Votre colis est en cours d’acheminement',
+    'your shipment is on its way': 'Votre colis est en cours d’acheminement',
+    'we have your package': 'Le transporteur a pris en charge votre colis',
+    'we have your parcel': 'Le transporteur a pris en charge votre colis',
+    'delivered': 'Livré',
+    'shipment delivered': 'Colis livré',
+    'delivered to recipient': 'Colis remis au destinataire',
+    'delivered to the recipient': 'Colis remis au destinataire',
+    'out for delivery': 'En cours de livraison',
+    'shipment is out for delivery': 'Colis en cours de livraison',
+    'shipment is in transit': 'Colis en transit',
+    'shipment moving through network': 'Colis en cours d’acheminement',
+    'delivery attempted': 'Tentative de livraison',
+    'delivery attempt': 'Tentative de livraison',
+    'picked up': 'Pris en charge',
+    'shipment picked up': 'Colis pris en charge',
+    'accepted': 'Pris en charge par le transporteur',
+    'in transit': 'En transit',
+    'transit': 'En transit',
+    'on the way': 'En transit',
+    'arrived at destination': 'Arrivé à destination',
+    'arrived at facility': 'Arrivé dans un centre de tri',
+    'departed from facility': 'Parti du centre de tri',
+    'departed facility': 'Parti du centre de tri',
+    'label created': 'Étiquette créée',
+    'shipment information sent': 'Informations d’expédition transmises',
+    'shipment information sent to fedex': 'Informations d’expédition transmises à FedEx',
+    'shipment exception': 'Incident de transport',
+    'delivery exception': 'Incident de livraison',
+    'clearance in progress': 'Dédouanement en cours',
+    'customs clearance': 'Dédouanement en cours',
+    'package available for pickup': 'Colis disponible au retrait',
+    'available for pickup': 'Disponible au retrait',
+    'left at': 'Déposé à l’adresse de livraison',
+    'international shipment release': 'Colis libéré par la douane'
+  };
+  if (translations[normalized]) return translations[normalized];
+  const shipmentInformation = state.match(/^(?:shipment information|shipping information) (?:has been )?(received|submitted|sent)(?: by (.+))?\.?$/i);
+  if (shipmentInformation) {
+    const action = shipmentInformation[1].toLowerCase() === 'received' ? 'reçues' : 'transmises';
+    const carrier = shipmentInformation[2] ? ` par ${shipmentInformation[2]}` : '';
+    return `Informations d’expédition ${action}${carrier}`;
+  }
+  const packageAction = state.match(/^(?:your )?(?:package|parcel|shipment) (?:has been )?(picked up|accepted|delivered|is in transit|is out for delivery)\.?$/i);
+  if (packageAction) {
+    const action = packageAction[1].toLowerCase();
+    const translationsByAction = {
+      'picked up': 'pris en charge',
+      'accepted': 'accepté par le transporteur',
+      'delivered': 'livré',
+      'is in transit': 'en cours d’acheminement',
+      'is out for delivery': 'en cours de livraison'
+    };
+    return `Colis ${translationsByAction[action]}`;
+  }
+  const destinationReady = state.match(/^(?:your )?(?:package|parcel|shipment) is (?:ready|available) for pickup\.?$/i);
+  if (destinationReady) return 'Votre colis est disponible au retrait';
+  const hubArrival = state.match(/^arrived at (.+?) hub$/i);
+  if (hubArrival) return `Arrivé au centre de tri ${hubArrival[1]}`;
+  const hubDeparture = state.match(/^departed (?:from )?(.+?) hub$/i);
+  if (hubDeparture) return `Parti du centre de tri ${hubDeparture[1]}`;
+  const facilityUpdate = state.match(/^(?:shipment )?(arrived|departed|processed) (?:at|from) (.+?)(?: facility| location)?$/i);
+  if (facilityUpdate) {
+    const action = { arrived: 'Arrivé au centre de tri', departed: 'Parti du centre de tri', processed: 'Traité au centre de tri' };
+    return `${action[facilityUpdate[1].toLowerCase()]} ${facilityUpdate[2]}`;
+  }
+  const localFacility = state.match(/^at (?:the )?local (.+?) facility$/i);
+  if (localFacility) return `Au centre de tri local ${localFacility[1]}`;
+  const deliveredPlace = state.match(/^left at (.+)$/i);
+  if (deliveredPlace) return `Déposé à ${deliveredPlace[1]}`;
+  const carrierShipmentInfo = state.match(/^shipment information sent to (.+)$/i);
+  if (carrierShipmentInfo) return `Informations d’expédition transmises à ${carrierShipmentInfo[1]}`;
+  return state;
+}
+
+function trackingTranslationKey(language, text) {
+  return `${language}\u0000${text}`;
+}
+
+function getTrackingDisplayText(text) {
+  if (!trackingTranslationEnabled || trackingTranslationLanguage.value === 'en') return text;
+  const translated = trackingTranslations.get(trackingTranslationKey(trackingTranslationLanguage.value, text));
+  if (translated) return translated;
+  return trackingTranslationLanguage.value === 'fr' ? translateTrackingState(text) : text;
+}
+
+function requestTrackingTranslations(shipment, texts) {
+  const language = trackingTranslationLanguage.value;
+  if (!trackingTranslationEnabled || language === 'en') {
+    trackingTranslationMessage.hidden = true;
+    return;
+  }
+
+  const unresolved = [...new Set(texts)].filter(text =>
+    text && !trackingTranslations.has(trackingTranslationKey(language, text))
+  );
+  if (unresolved.length === 0) {
+    trackingTranslationMessage.hidden = true;
+    return;
+  }
+
+  const jobKey = `${shipment.number}\u0000${language}`;
+  if (trackingTranslationJobs.has(jobKey)) return;
+  trackingTranslationJobs.add(jobKey);
+  trackingTranslationMessage.hidden = false;
+  trackingTranslationMessage.classList.remove('is-error');
+  trackingTranslationMessage.textContent = `Traduction en cours… ${unresolved.length} texte(s)`;
+
+  void (async () => {
+    try {
+      for (let index = 0; index < unresolved.length; index += 10) {
+        const textsToTranslate = unresolved.slice(index, index + 10);
+        const response = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetLanguage: language, texts: textsToTranslate })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'La traduction a échoué.');
+        if (!Array.isArray(result.translations) || result.translations.length !== textsToTranslate.length) {
+          throw new Error('La réponse de traduction est incomplète.');
+        }
+        textsToTranslate.forEach((text, textIndex) => {
+          const translated = result.translations[textIndex];
+          if (typeof translated !== 'string' || !translated.trim()) {
+            throw new Error('Une étape n’a pas pu être traduite.');
+          }
+          trackingTranslations.set(trackingTranslationKey(language, text), translated.trim());
+        });
+      }
+    } catch (error) {
+      if (selectedTracking === shipment.number && trackingTranslationLanguage.value === language) {
+        trackingTranslationMessage.textContent = `${error.message} Les traductions locales disponibles sont conservées.`;
+        trackingTranslationMessage.classList.add('is-error');
+      }
+      return;
+    } finally {
+      trackingTranslationJobs.delete(jobKey);
+    }
+
+    if (
+      selectedTracking === shipment.number &&
+      trackingTranslationEnabled &&
+      trackingTranslationLanguage.value === language
+    ) {
+      trackingTranslationMessage.hidden = true;
+      renderTrackingHistory(shipments.find(item => item.number === selectedTracking));
+    }
+  })();
+}
+
+function findCarrierAcceptanceDate(events) {
+  const acceptedEvents = events.flatMap(event => {
+    const state = typeof event.state === 'string' ? event.state : '';
+    const timestamp = Date.parse(event.date);
+    if (
+      !/(?:\b(?:picked up|collected by (?:the )?carrier|accepted by (?:the )?carrier|received by (?:the )?carrier|shipment accepted|package accepted|handed over to (?:the )?carrier)\b|pris en charge|collecté par le transporteur|accepté par le transporteur|reçu par le transporteur|remis au transporteur)/i.test(state) ||
+      !Number.isFinite(timestamp) ||
+      timestamp > Date.now()
+    ) return [];
+    return [{ date: new Date(timestamp).toISOString(), timestamp }];
+  });
+  return acceptedEvents.sort((left, right) => left.timestamp - right.timestamp)[0]?.date ?? '';
+}
+
+function getShipmentTrackingTimestamp(shipment) {
+  const events = Array.isArray(shipment.tracking?.events) ? shipment.tracking.events : [];
+  const acceptanceDate = findCarrierAcceptanceDate(events);
+  if (acceptanceDate) return Date.parse(acceptanceDate);
+  const eventTimestamps = events
+    .map(event => Date.parse(event.date))
+    .filter(timestamp => Number.isFinite(timestamp) && timestamp <= Date.now());
+  return eventTimestamps.length ? Math.min(...eventTimestamps) : Date.parse(shipment.addedAt);
+}
+
+function getTransitDurationLabel(shipment) {
+  const events = Array.isArray(shipment.tracking?.events) ? shipment.tracking.events : [];
+  const datedEvents = events.flatMap(event => {
+    const timestamp = Date.parse(event.date);
+    return Number.isFinite(timestamp) && timestamp <= Date.now()
+      ? [{ event, timestamp }]
+      : [];
+  });
+  if (!datedEvents.length) return '';
+
+  const acceptanceDate = findCarrierAcceptanceDate(events);
+  const startTimestamp = acceptanceDate
+    ? Date.parse(acceptanceDate)
+    : datedEvents
+      .filter(({ event }) => !/\b(?:label created|shipment information received|awaiting|ready to take care)\b/i.test(event.state))
+      .sort((left, right) => left.timestamp - right.timestamp)[0]?.timestamp;
+  if (!Number.isFinite(startTimestamp)) return '';
+
+  datedEvents.sort((left, right) => left.timestamp - right.timestamp);
+  const deliveredEvent = datedEvents
+    .filter(({ event }) => /(?:\bdelivered\b|livré|livrée)/i.test(event.state))
+    .sort((left, right) => left.timestamp - right.timestamp)[0];
+  const delivered = deliveredEvent || /(?:\bdelivered\b|livré|livrée)/i.test(shipment.tracking?.status ?? '');
+  const endTimestamp = delivered
+    ? deliveredEvent?.timestamp ?? datedEvents.at(-1).timestamp
+    : Date.now();
+  const days = Math.floor(Math.max(0, endTimestamp - startTimestamp) / 86_400_000);
+  const duration = days === 0 ? 'moins d’un jour' : `${days} ${days === 1 ? 'jour' : 'jours'}`;
+  return delivered ? `Transit : ${duration}` : `En transit depuis ${duration}`;
+}
+
+function saveDeliveryEstimate(trackingNumber, estimate) {
+  const previousShipments = shipments;
+  shipments = shipments.map(shipment => shipment.number === trackingNumber
+    ? { ...shipment, tracking: { ...shipment.tracking, deliveryEstimate: estimate } }
+    : shipment);
+  if (!saveShipments()) {
+    shipments = previousShipments;
+    return;
+  }
+  if (selectedTracking === trackingNumber) renderDeliveryEstimate(shipments.find(item => item.number === trackingNumber));
+}
+
+function renderDeliveryEstimate(shipment) {
+  deliveryCountdownWindow.textContent = '';
+  deliveryCountdownConfidence.hidden = true;
+  if (!shipment) {
+    deliveryCountdownTime.textContent = 'Sélectionnez un colis pour afficher une estimation.';
+    deliveryCountdownNote.textContent = 'L’estimation dépend des données fournies par le transporteur.';
+    return;
+  }
+
+  const status = typeof shipment.tracking?.status === 'string' ? shipment.tracking.status : '';
+  const events = Array.isArray(shipment.tracking?.events) ? shipment.tracking.events : [];
+  const isDelivered = /\bdelivered\b/i.test(status) ||
+    events.some(event => /\bdelivered\b/i.test(typeof event.state === 'string' ? event.state : ''));
+  if (isDelivered) {
+    deliveryCountdownTime.textContent = 'Colis livré';
+    deliveryCountdownWindow.textContent = '';
+    deliveryCountdownNote.textContent = 'Le transporteur a confirmé la livraison.';
+    return;
+  }
+
+  const estimate = shipment.tracking?.deliveryEstimate;
+  if (deliveryEstimateRequests.has(shipment.number) || estimate?.state === 'loading') {
+    deliveryCountdownTime.textContent = 'Calcul de la fenêtre estimée…';
+    deliveryCountdownNote.textContent = 'L’estimation ne consomme pas le quota de suivi Parcels.';
+    return;
+  }
+  if (estimate?.state !== 'ready' || !Number.isFinite(Date.parse(estimate.from)) || !Number.isFinite(Date.parse(estimate.to))) {
+    deliveryCountdownTime.textContent = 'Pas encore d’estimation fiable';
+    const unavailableMessages = {
+      missing_acceptance: 'Une fenêtre pourra être calculée après un scan de prise en charge confirmé par le transporteur.',
+      insufficient_data: 'Les données historiques du transporteur ne suffisent pas à estimer ce trajet.',
+      feature_unavailable: 'Le service d’estimation Parcels n’est pas disponible actuellement pour ce compte.',
+      rate_limited: 'Le service limite temporairement les estimations. Réessayez lors de la prochaine actualisation.',
+      service_unavailable: 'Le service d’estimation est temporairement indisponible. Actualisez le suivi plus tard.'
+    };
+    deliveryCountdownNote.textContent = unavailableMessages[estimate?.reason] ??
+      'Une estimation s’affichera lorsque le transporteur et les lieux de départ et d’arrivée seront connus.';
+    return;
+  }
+
+  const now = Date.now();
+  const from = Date.parse(estimate.from);
+  const to = Date.parse(estimate.to);
+  const formatDate = date => new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+  deliveryCountdownWindow.textContent = `${formatDate(new Date(from))} – ${formatDate(new Date(to))} · heure locale de l’appareil`;
+  const confidenceLabels = {
+    high: 'Fiabilité élevée',
+    medium: 'Fiabilité moyenne',
+    low: 'Fiabilité faible'
+  };
+  const confidence = confidenceLabels[estimate.confidence];
+  if (confidence) {
+    deliveryCountdownConfidence.textContent = confidence;
+    deliveryCountdownConfidence.hidden = false;
+  }
+  if (now < from) {
+    const remainingMinutes = Math.ceil((from - now) / 60_000);
+    const days = Math.floor(remainingMinutes / 1440);
+    const hours = Math.floor((remainingMinutes % 1440) / 60);
+    const minutes = remainingMinutes % 60;
+    deliveryCountdownTime.textContent = `Fenêtre dans ${days ? `${days} j ` : ''}${hours} h ${minutes.toString().padStart(2, '0')} min`;
+    deliveryCountdownNote.textContent = 'Prévision statistique indicative, susceptible d’évoluer avec les prochains scans.';
+  } else if (now <= to) {
+    const remainingMinutes = Math.ceil((to - now) / 60_000);
+    const days = Math.floor(remainingMinutes / 1440);
+    const hours = Math.floor((remainingMinutes % 1440) / 60);
+    deliveryCountdownTime.textContent = `Fenêtre de livraison en cours${remainingMinutes ? ` · jusqu’à ${days ? `${days} j ` : ''}${hours} h` : ''}`;
+    deliveryCountdownNote.textContent = 'Prévision statistique indicative, susceptible d’évoluer avec les prochains scans.';
+  } else {
+    deliveryCountdownTime.textContent = 'La fenêtre estimée est dépassée';
+    deliveryCountdownNote.textContent = 'L’ETA a peut-être évolué. Actualisez le suivi pour obtenir les dernières données.';
+  }
+}
+
+async function refreshDeliveryEstimate(trackingNumber, trackingResult, events) {
+  const trackingStatus = typeof trackingResult.status === 'string' ? trackingResult.status : '';
+  const acceptanceDate = findCarrierAcceptanceDate(events);
+  const canEstimate = typeof trackingResult.carrierSlug === 'string' &&
+    typeof trackingResult.transportMode === 'string' &&
+    typeof trackingResult.originCountryCode === 'string' &&
+    typeof trackingResult.destinationCountryCode === 'string';
+  if (!acceptanceDate || !canEstimate || /\bdelivered\b/i.test(trackingStatus)) {
+    saveDeliveryEstimate(trackingNumber, {
+      state: 'unavailable',
+      reason: /\bdelivered\b/i.test(trackingStatus) ? 'delivered' : 'missing_acceptance'
+    });
+    return;
+  }
+
+  deliveryEstimateRequests.add(trackingNumber);
+  if (selectedTracking === trackingNumber) renderDeliveryEstimate(shipments.find(item => item.number === trackingNumber));
+  try {
+    const response = await fetch('/api/estimate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        carrierSlug: trackingResult.carrierSlug,
+        transportMode: trackingResult.transportMode,
+        originCountryCode: trackingResult.originCountryCode,
+        destinationCountryCode: trackingResult.destinationCountryCode,
+        acceptedAt: acceptanceDate
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Le service d’estimation est momentanément indisponible.');
+    const range = data.estimate;
+    if (
+      !range ||
+      !Number.isFinite(Date.parse(range.from)) ||
+      !Number.isFinite(Date.parse(range.to)) ||
+      Date.parse(range.to) < Date.parse(range.from)
+    ) {
+      const insufficientData = data.reason === 'INSUFFICIENT_DATA' ||
+        data.reason === 'insufficient_censored_data' ||
+        data.reason === 'insufficient_tail_data';
+      saveDeliveryEstimate(trackingNumber, {
+        state: 'unavailable',
+        reason: insufficientData
+          ? 'insufficient_data'
+          : data.reason === 'FEATURE_UNAVAILABLE'
+            ? 'feature_unavailable'
+            : data.reason === 'RATE_LIMITED'
+              ? 'rate_limited'
+              : 'no_reliable_window'
+      });
+      return;
+    }
+    saveDeliveryEstimate(trackingNumber, {
+      state: 'ready',
+      from: range.from,
+      to: range.to,
+      confidence: range.confidence,
+      medianDays: range.medianDays
+    });
+  } catch (error) {
+    console.warn('Impossible de calculer la fenêtre de livraison estimée.', error);
+    saveDeliveryEstimate(trackingNumber, { state: 'unavailable', reason: 'service_unavailable' });
+  } finally {
+    deliveryEstimateRequests.delete(trackingNumber);
+    if (selectedTracking === trackingNumber) renderDeliveryEstimate(shipments.find(item => item.number === trackingNumber));
+  }
 }
 
 function renderTrackingHistory(shipment) {
   trackingSummary.replaceChildren();
   trackingEvents.replaceChildren();
+  const trackingNumber = shipment?.number ?? '';
+  if (trackingCarrierSelectionFor !== trackingNumber) {
+    resetCarrierSearch();
+    trackingCarrierSelectionFor = trackingNumber;
+  }
+  renderDeliveryEstimate(shipment);
   const events = Array.isArray(shipment?.tracking?.events) ? shipment.tracking.events : [];
   const flightLegs = Array.isArray(shipment?.tracking?.flightLegs) ? shipment.tracking.flightLegs : [];
+  const hasTranslatableTexts = events.length > 0 || flightLegs.some(leg => typeof leg.status === 'string' && leg.status);
+  trackingTranslationControls.hidden = !hasTranslatableTexts;
+  trackingTranslationToggle.hidden = trackingTranslationLanguage.value === 'en';
+  trackingTranslationLanguage.disabled = !hasTranslatableTexts;
+  trackingTranslationToggle.textContent = trackingTranslationEnabled
+    ? 'Afficher le texte original'
+    : `Traduire en ${trackingTranslationLanguage.selectedOptions[0]?.textContent ?? 'français'}`;
+  if (!hasTranslatableTexts || !trackingTranslationEnabled || trackingTranslationLanguage.value === 'en') {
+    trackingTranslationMessage.hidden = true;
+  }
+  renderSidebarCurrentParcel();
   parcelWidgetDetails.hidden = !shipment?.tracking || events.length > 0 || flightLegs.length > 0;
-  trackingCountryForm.hidden = !shipment?.tracking?.needsDestinationCountry;
+  trackingCountryForm.hidden = !shipment?.tracking?.needsDestinationCountry &&
+    !shipment?.tracking?.needsRecipientDetails;
+  if (shipment?.tracking?.needsRecipientDetails) {
+    const selectedRequirements = carrierInputRequirements.get(trackingCarrierSelect.value) ?? {};
+    const acceptedFields = new Set(shipment.tracking.acceptedFields ?? []);
+    const requirements = shipment.tracking.inputRequirements ?? selectedRequirements;
+    const requestedFields = new Set([
+      ...acceptedFields,
+      ...(requirements.required ?? []),
+      ...(requirements.any_of ?? [])
+    ]);
+    const showAllRecipientFields = requestedFields.size === 0;
+    trackingRecipientPostalCode.hidden = !showAllRecipientFields && !requestedFields.has('postal_code');
+    trackingRecipientEmail.hidden = !showAllRecipientFields && !requestedFields.has('email');
+    trackingRecipientPhone.hidden = !showAllRecipientFields && !requestedFields.has('phone');
+    trackingCarrierMessage.textContent = showAllRecipientFields
+      ? 'Parcels demande des informations sur le destinataire. Saisissez uniquement celles demandées par le transporteur ; elles ne seront transmises qu’à Parcels pour cette recherche.'
+      : 'Le transporteur demande ces informations pour confirmer le destinataire ; elles ne sont transmises qu’à Parcels pour cette recherche.';
+  }
   trackingDestinationCountry.value =
     shipment?.destinationCountry ?? shipment?.route?.destination?.country ?? '';
 
@@ -366,9 +1332,20 @@ function renderTrackingHistory(shipment) {
 
   const summaryTitle = document.createElement('strong');
   summaryTitle.className = 'tracking-summary-status';
+  const currentStatus = typeof shipment.tracking?.status === 'string' ? shipment.tracking.status : '';
+  const isInTransit = /\b(?:in[\s_-]*)?transit\b/i.test(currentStatus);
+  summaryTitle.classList.toggle('is-transit', isInTransit);
   summaryTitle.textContent = shipment.tracking?.error
     ? 'Suivi indisponible'
-    : shipment.tracking?.status || 'Suivi du colis';
+    : currentStatus
+      ? getTrackingDisplayText(currentStatus)
+      : 'Suivi du colis';
+  if (shipment.name?.trim()) {
+    const shipmentName = document.createElement('span');
+    shipmentName.className = 'tracking-summary-name';
+    shipmentName.textContent = shipment.name.trim();
+    trackingSummary.append(shipmentName);
+  }
   trackingSummary.append(summaryTitle);
 
   const summaryDetails = document.createElement('span');
@@ -384,11 +1361,32 @@ function renderTrackingHistory(shipment) {
   ].filter(Boolean).join(' · ');
   trackingSummary.append(summaryDetails);
 
+  const carrierLinkUrl = carrierTrackingUrl(getShipmentCarrier(shipment).id, shipment.number);
+  if (carrierLinkUrl) {
+    const carrierLink = document.createElement('a');
+    carrierLink.className = 'tracking-carrier-link';
+    carrierLink.href = carrierLinkUrl;
+    carrierLink.textContent = `Suivre chez ${carrier}`;
+    carrierLink.setAttribute('aria-label', `Ouvrir le suivi ${carrier} pour le colis ${shipment.number}`);
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = ' ↗';
+    carrierLink.append(icon);
+    setOutboundLinkBehavior(carrierLink);
+    trackingSummary.append(carrierLink);
+  }
+
   if (shipment.tracking?.error) {
     const message = document.createElement('p');
     message.className = 'tracking-summary-message';
     message.textContent = shipment.tracking.error.replace(/\s*\(Parcels API v4[^)]*\)/g, '');
     trackingEvents.append(message);
+    if (shipment.tracking.detail) {
+      const detail = document.createElement('p');
+      detail.className = 'tracking-summary-message';
+      detail.textContent = `Détail du service : ${shipment.tracking.detail}`;
+      trackingEvents.append(detail);
+    }
   }
 
   if (events.length === 0 && flightLegs.length === 0) {
@@ -397,7 +1395,9 @@ function renderTrackingHistory(shipment) {
     message.textContent = shipment.tracking?.error
       ? ''
       : shipment.tracking
-        ? `Parcels a reconnu ${getShipmentCarrier(shipment).label}, mais n’a renvoyé aucun événement détaillé pour ce colis. Le suivi complet est accessible via le lien Parcel App ci-dessous.`
+        ? shipment.tracking.provider === '17TRACK'
+          ? `17TRACK a reconnu ${getShipmentCarrier(shipment).label}, mais n’a pas encore renvoyé d’événement détaillé pour ce colis.`
+          : `Parcels a reconnu ${getShipmentCarrier(shipment).label}, mais n’a renvoyé aucun événement détaillé pour ce colis. Le suivi complet est accessible via le lien Parcel App ci-dessous.`
         : 'Cliquez sur « Suivre » dans Mes colis pour demander les étapes détaillées à Parcels.';
     if (message.textContent) trackingEvents.append(message);
     return;
@@ -419,7 +1419,7 @@ function renderTrackingHistory(shipment) {
     const content = document.createElement('div');
     content.className = 'tracking-event-content';
     const state = document.createElement('strong');
-    state.textContent = event.state;
+    state.textContent = getTrackingDisplayText(event.state);
     content.append(state);
     if (event.location) {
       const location = document.createElement('span');
@@ -451,13 +1451,33 @@ function renderTrackingHistory(shipment) {
     content.append(route);
     if (leg.flightNumber || leg.status) {
       const details = document.createElement('span');
-      details.textContent = [leg.flightNumber, leg.status].filter(Boolean).join(' · ');
+      const status = typeof leg.status === 'string'
+        ? getTrackingDisplayText(leg.status)
+        : '';
+      details.textContent = [leg.flightNumber, status].filter(Boolean).join(' · ');
       content.append(details);
     }
     item.append(time, content);
     trackingEvents.append(item);
   }
+  requestTrackingTranslations(shipment, [
+    currentStatus,
+    ...events.map(event => event.state),
+    ...flightLegs.map(leg => leg.status)
+  ].filter(text => typeof text === 'string' && text.trim()));
 }
+
+trackingTranslationToggle.addEventListener('click', () => {
+  trackingTranslationEnabled = !trackingTranslationEnabled;
+  const shipment = shipments.find(item => item.number === selectedTracking);
+  renderTrackingHistory(shipment);
+});
+
+trackingTranslationLanguage.addEventListener('change', () => {
+  trackingTranslationEnabled = true;
+  trackingTranslationMessage.hidden = true;
+  renderTrackingHistory(shipments.find(item => item.number === selectedTracking));
+});
 
 parcelWidgetDetails.addEventListener('toggle', () => {
   if (parcelWidgetDetails.open && parcelWidget.dataset.src && parcelWidget.src !== parcelWidget.dataset.src) {
@@ -468,20 +1488,22 @@ parcelWidgetDetails.addEventListener('toggle', () => {
 function renderShipments() {
   shipmentList.replaceChildren();
   shipmentCount.textContent = String(shipments.length);
+  renderSidebarCurrentParcel();
   emptyState.hidden = shipments.length > 0;
 
-  for (const shipment of shipments) {
+  const sortedShipments = getSortedShipments();
+
+  let shipmentIndex = 0;
+  for (const shipment of sortedShipments) {
     const item = document.createElement('article');
     item.className = `shipment-item${shipment.number === selectedTracking ? ' is-selected' : ''}`;
+    item.dataset.tint = String(shipmentIndex % 6);
+    shipmentIndex += 1;
 
     const icon = document.createElement('span');
     icon.className = 'shipment-icon';
     const carrier = getShipmentCarrier(shipment);
-    icon.dataset.carrier = carrier.id;
-    icon.textContent = carrier.mark;
-    icon.title = carrier.label;
-    icon.setAttribute('role', 'img');
-    icon.setAttribute('aria-label', `Transporteur : ${carrier.label}`);
+    renderCarrierIcon(icon, shipment, carrier);
 
     const info = document.createElement('div');
     info.className = 'shipment-info';
@@ -531,7 +1553,7 @@ function renderShipments() {
       queueMicrotask(() => renameInput.focus());
     } else {
       const name = document.createElement('span');
-      name.className = 'shipment-name';
+      name.className = shipment.name ? 'shipment-name' : 'shipment-name shipment-number';
       name.textContent = shipment.name || shipment.number;
       info.append(name);
       if (shipment.name) {
@@ -547,6 +1569,13 @@ function renderShipments() {
       carrierName.className = 'shipment-carrier';
       carrierName.textContent = carrier.label;
       info.append(carrierName, date);
+      const transitDuration = getTransitDurationLabel(shipment);
+      if (transitDuration) {
+        const transit = document.createElement('span');
+        transit.className = 'shipment-transit-duration';
+        transit.textContent = transitDuration;
+        info.append(transit);
+      }
     }
 
     const actions = document.createElement('div');
@@ -560,7 +1589,7 @@ function renderShipments() {
       selectedTracking = shipment.number;
       updateParcelTrackingLink();
       renderShipments();
-      updateSelectedParcelRoute({ fetchDetails: true });
+      updateSelectedParcelRoute({ fetchDetails: true, forceRefresh: true });
       document.querySelector('#suivi').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
@@ -571,7 +1600,23 @@ function renderShipments() {
     rename.setAttribute('aria-label', `Renommer le colis ${shipment.number}`);
     rename.addEventListener('click', () => {
       editingShipment = shipment.number;
+      editingCarrierShipment = '';
       renderShipments();
+    });
+
+    const correctCarrier = document.createElement('button');
+    correctCarrier.className = 'shipment-carrier-edit';
+    correctCarrier.type = 'button';
+    correctCarrier.textContent = editingCarrierShipment === shipment.number ? 'Fermer' : 'Corriger transporteur';
+    correctCarrier.setAttribute('aria-expanded', String(editingCarrierShipment === shipment.number));
+    correctCarrier.setAttribute('aria-label', `Corriger le transporteur du colis ${shipment.number}`);
+    correctCarrier.addEventListener('click', () => {
+      editingCarrierShipment = editingCarrierShipment === shipment.number ? '' : shipment.number;
+      editingShipment = '';
+      renderShipments();
+      if (editingCarrierShipment === shipment.number) {
+        item.querySelector('.shipment-carrier-search')?.focus();
+      }
     });
 
     const remove = document.createElement('button');
@@ -596,12 +1641,202 @@ function renderShipments() {
     if (shipment.number === editingShipment) {
       actions.append(remove);
     } else {
-      actions.append(select, rename, remove);
+      actions.append(select, rename, correctCarrier, remove);
     }
     item.append(icon, info, actions);
+    if (editingCarrierShipment === shipment.number) {
+      const correctionForm = document.createElement('form');
+      correctionForm.className = 'shipment-carrier-form';
+      const instructions = document.createElement('p');
+      instructions.textContent = 'Recherchez le transporteur indiqué par le vendeur ou le suivi officiel, puis relancez la recherche du colis.';
+      const search = document.createElement('input');
+      search.className = 'shipment-carrier-search';
+      search.type = 'search';
+      search.autocomplete = 'off';
+      search.maxLength = 100;
+      search.placeholder = 'Rechercher un transporteur (ex. La Poste)';
+      search.setAttribute('aria-label', `Rechercher un transporteur pour le colis ${shipment.number}`);
+      const carrierSelect = document.createElement('select');
+      carrierSelect.disabled = true;
+      carrierSelect.setAttribute('aria-label', `Transporteur à utiliser pour le colis ${shipment.number}`);
+      carrierSelect.add(new Option('Recherchez puis choisissez un transporteur', ''));
+      const country = document.createElement('input');
+      country.type = 'text';
+      country.autocomplete = 'country-name';
+      country.maxLength = 100;
+      country.placeholder = 'Pays de destination (facultatif)';
+      country.setAttribute('aria-label', `Pays de destination du colis ${shipment.number}`);
+      const postalCode = document.createElement('input');
+      postalCode.type = 'text';
+      postalCode.autocomplete = 'postal-code';
+      postalCode.maxLength = 32;
+      postalCode.placeholder = 'Code postal (si demandé)';
+      postalCode.setAttribute('aria-label', `Code postal du destinataire pour le colis ${shipment.number}`);
+      postalCode.hidden = true;
+      const email = document.createElement('input');
+      email.type = 'email';
+      email.autocomplete = 'email';
+      email.maxLength = 254;
+      email.placeholder = 'E-mail du destinataire (si demandé)';
+      email.setAttribute('aria-label', `E-mail du destinataire pour le colis ${shipment.number}`);
+      email.hidden = true;
+      const phone = document.createElement('input');
+      phone.type = 'tel';
+      phone.autocomplete = 'tel';
+      phone.maxLength = 40;
+      phone.placeholder = 'Téléphone du destinataire (si demandé)';
+      phone.setAttribute('aria-label', `Téléphone du destinataire pour le colis ${shipment.number}`);
+      phone.hidden = true;
+      const message = document.createElement('p');
+      message.className = 'shipment-carrier-message';
+      message.setAttribute('aria-live', 'polite');
+      message.textContent = 'La sélection sera enregistrée pour ce colis et transmise à Parcels.';
+      const submit = document.createElement('button');
+      submit.type = 'submit';
+      submit.textContent = 'Enregistrer et relancer le suivi';
+      let searchTimer;
+      let searchSequence = 0;
+      let requirements = {};
+
+      search.addEventListener('input', () => {
+        window.clearTimeout(searchTimer);
+        const query = search.value.trim();
+        const sequence = ++searchSequence;
+        carrierSelect.replaceChildren(new Option('Recherche des transporteurs…', ''));
+        carrierSelect.disabled = true;
+        requirements = {};
+        if (query.length < 2) {
+          carrierSelect.replaceChildren(new Option('Saisissez au moins 2 caractères', ''));
+          message.textContent = 'Saisissez au moins 2 caractères pour rechercher un transporteur.';
+          return;
+        }
+        message.textContent = 'Recherche dans le catalogue Parcels…';
+        searchTimer = window.setTimeout(async () => {
+          try {
+            const response = await fetch(`/api/carriers?${new URLSearchParams({ query })}`, { cache: 'no-store' });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Le catalogue des transporteurs est indisponible.');
+            if (sequence !== searchSequence) return;
+            const carriers = Array.isArray(data.carriers) ? data.carriers : [];
+            requirements = Object.fromEntries(carriers
+              .filter(carrier => typeof carrier?.slug === 'string')
+              .map(carrier => [carrier.slug, carrier.inputRequirements ?? {}]));
+            carrierSelect.replaceChildren(
+              new Option(carriers.length ? 'Sélectionnez le bon transporteur' : 'Aucun transporteur trouvé', ''),
+              ...carriers.map(carrier => new Option(carrier.name, carrier.slug))
+            );
+            carrierSelect.disabled = carriers.length === 0;
+            message.textContent = carriers.length
+              ? `${carriers.length} résultat${carriers.length > 1 ? 's' : ''}. Choisissez le transporteur correspondant à l’étiquette ou au vendeur.`
+              : 'Aucun résultat. Essayez un autre nom.';
+          } catch (error) {
+            if (sequence !== searchSequence) return;
+            carrierSelect.replaceChildren(new Option('Recherche indisponible', ''));
+            message.textContent = error.message || 'La recherche de transporteur a échoué.';
+          }
+        }, 300);
+      });
+      search.addEventListener('keydown', event => {
+        if (event.key === 'Enter') event.preventDefault();
+      });
+      carrierSelect.addEventListener('change', () => {
+        const choice = carrierSelect.selectedOptions[0];
+        const requirementsForCarrier = requirements[carrierSelect.value] ?? {};
+        const requiredFields = Array.isArray(requirementsForCarrier.required) ? requirementsForCarrier.required : [];
+        const alternatives = Array.isArray(requirementsForCarrier.any_of) ? requirementsForCarrier.any_of : [];
+        postalCode.hidden = ![...requiredFields, ...alternatives].includes('postal_code');
+        email.hidden = ![...requiredFields, ...alternatives].includes('email');
+        phone.hidden = ![...requiredFields, ...alternatives].includes('phone');
+        message.textContent = choice?.value
+          ? `${choice.textContent} sera utilisé pour ce suivi.${requiredFields.length || alternatives.length ? ` Informations demandées : ${[...new Set([...requiredFields, ...alternatives])].join(', ')}.` : ''}`
+          : 'Choisissez le transporteur indiqué par le vendeur ou le suivi officiel.';
+      });
+      correctionForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (routeRequests.has(shipment.number)) {
+          message.textContent = 'Une recherche est déjà en cours pour ce colis. Réessayez dès qu’elle est terminée.';
+          return;
+        }
+        const carrierHint = carrierSelect.value;
+        const carrierName = carrierSelect.selectedOptions[0]?.textContent?.trim() ?? '';
+        if (!carrierHint || !carrierName) {
+          message.textContent = 'Recherchez puis sélectionnez le transporteur avant de relancer le suivi.';
+          search.focus();
+          return;
+        }
+        const recipientDetails = {
+          postal_code: postalCode.value.trim(),
+          email: email.value.trim(),
+          phone: phone.value.trim()
+        };
+        for (const [key, value] of Object.entries(recipientDetails)) {
+          if (!value) delete recipientDetails[key];
+        }
+        const previousShipments = shipments;
+        shipments = shipments.map(saved => saved.number === shipment.number
+          ? { ...saved, carrierHint, carrierName, ...(country.value.trim() ? { destinationCountry: country.value.trim() } : {}) }
+          : saved);
+        if (!saveShipments()) {
+          shipments = previousShipments;
+          return;
+        }
+        selectedTracking = shipment.number;
+        updateParcelTrackingLink();
+        renderShipments();
+        const activeForm = shipmentList.querySelector('.shipment-carrier-form button[type="submit"]');
+        if (activeForm) activeForm.disabled = true;
+        const activeMessage = shipmentList.querySelector('.shipment-carrier-message');
+        if (activeMessage) activeMessage.textContent = `Relance du suivi avec ${carrierName}…`;
+        try {
+          await updateSelectedParcelRoute({
+            fetchDetails: true,
+            forceRefresh: true,
+            destinationCountry: country.value.trim(),
+            carrierHint,
+            recipientDetails
+          });
+          const updatedShipment = shipments.find(item => item.number === shipment.number);
+          if (updatedShipment?.tracking?.error) {
+            showMessage(`Le transporteur a été enregistré, mais le suivi a échoué : ${updatedShipment.tracking.error}`, true);
+          } else {
+            showMessage(`Transporteur corrigé en ${carrierName}.`);
+          }
+        } finally {
+          window.clearTimeout(searchTimer);
+          editingCarrierShipment = '';
+          renderShipments();
+        }
+      });
+      correctionForm.append(instructions, search, carrierSelect, country, postalCode, email, phone, message, submit);
+      item.append(correctionForm);
+    }
     shipmentList.append(item);
   }
 }
+
+function getSortedShipments() {
+  return shipments
+    .map((shipment, index) => ({ shipment, index, timestamp: getShipmentTrackingTimestamp(shipment) }))
+    .sort((left, right) => {
+      const leftTimestamp = Number.isFinite(left.timestamp) ? left.timestamp : 0;
+      const rightTimestamp = Number.isFinite(right.timestamp) ? right.timestamp : 0;
+      const difference = shipmentSort === 'oldest'
+        ? leftTimestamp - rightTimestamp
+        : rightTimestamp - leftTimestamp;
+      return difference || left.index - right.index;
+    })
+    .map(item => item.shipment);
+}
+
+shipmentSortOrder.addEventListener('change', () => {
+  shipmentSort = shipmentSortOrder.value === 'oldest' ? 'oldest' : 'newest';
+  try {
+    localStorage.setItem('colis-shipment-sort', shipmentSort);
+  } catch (error) {
+    showMessage('Le tri a changé, mais votre préférence ne peut pas être enregistrée.', true);
+  }
+  renderShipments();
+});
 
 let editingShipment = '';
 
@@ -676,10 +1911,116 @@ async function geocode(query) {
   return results.find(result => result.feature_code === 'PCLI') ?? results[0];
 }
 
+const routeCountryNames = {
+  DE: 'Allemagne',
+  ES: 'Espagne',
+  FR: 'France',
+  GB: 'Royaume-Uni',
+  IT: 'Italie',
+  NL: 'Pays-Bas',
+  US: 'États-Unis',
+  CN: 'Chine',
+  JP: 'Japon',
+  BE: 'Belgique',
+  CH: 'Suisse',
+  PT: 'Portugal'
+};
+
+function normalizeRouteLocation(query) {
+  let value = query.trim().replace(/_/g, ' ').replace(/\s+/g, ' ');
+  let country = '';
+  const codeMatch = value.match(/(?:,\s*|\s+)([A-Z]{2})$/i);
+  const countryCode = codeMatch?.[1].toUpperCase();
+  if (codeMatch && routeCountryNames[countryCode]) {
+    country = routeCountryNames[countryCode];
+    value = value.slice(0, codeMatch.index).trim();
+  }
+  value = value
+    .replace(/\bST\.?\s+/gi, 'Saint ')
+    .replace(/\bSTE\.?\s+/gi, 'Sainte ')
+    .replace(/\bSAINT\s+OUEN\b/gi, 'Saint-Ouen')
+    .replace(/\s+(?:CEDEX(?:\s+\d+)?|\d{5})\b/gi, '')
+    .toLocaleLowerCase('fr-FR')
+    .replace(/(^|[\s-])\p{L}/gu, character => character.toLocaleUpperCase('fr-FR'));
+  return { place: value, country };
+}
+
+async function geocodeRouteLocation(query) {
+  const normalized = normalizeRouteLocation(query);
+  const queries = [
+    [normalized.place, normalized.country].filter(Boolean).join(', '),
+    normalized.place
+  ].filter((value, index, values) => value && values.indexOf(value) === index);
+
+  for (const candidate of queries) {
+    const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+    url.search = new URLSearchParams({
+      name: candidate,
+      count: '10',
+      language: 'fr',
+      format: 'json'
+    }).toString();
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Recherche de lieu indisponible (${response.status}).`);
+    const { results } = await response.json();
+    if (!Array.isArray(results) || results.length === 0) continue;
+    return results.find(result =>
+      normalized.country && result.country_code?.toUpperCase() === Object.keys(routeCountryNames)
+        .find(code => routeCountryNames[code] === normalized.country)
+    ) ?? results[0];
+  }
+  throw new Error(`Aucun lieu trouvé pour « ${query} ».`);
+}
+
+function isCountryOnlyPoint(point) {
+  const pointName = point?.name?.trim().toLocaleLowerCase('fr-FR');
+  return Object.values(routeCountryNames).some(country =>
+    pointName === country.toLocaleLowerCase('fr-FR') ||
+    pointName?.endsWith(`, ${country.toLocaleLowerCase('fr-FR')}`)
+  );
+}
+
+async function refreshStoredRouteDestination(shipment) {
+  const events = Array.isArray(shipment.tracking?.events) ? shipment.tracking.events : [];
+  if (!isValidStoredRoute(shipment.route) || !isCountryOnlyPoint(shipment.route.destination) || !events.length) {
+    return shipment;
+  }
+  const latestLocation = [...events].reverse().find(event =>
+    typeof event.location === 'string' && event.location.trim()
+  )?.location.trim();
+  if (!latestLocation) return shipment;
+
+  const place = await geocodeRouteLocation(latestLocation);
+  if (place.feature_code === 'PCLI') return shipment;
+  const oldStops = Array.isArray(shipment.route.stops) && shipment.route.stops.length > 1
+    ? shipment.route.stops
+    : [shipment.route.origin, shipment.route.destination];
+  const destination = {
+    name: placeName(place),
+    latitude: place.latitude,
+    longitude: place.longitude,
+    label: `Destination : ${latestLocation}`
+  };
+  const route = {
+    ...shipment.route,
+    destination,
+    stops: [...oldStops.slice(0, -1), destination]
+  };
+  const previousShipments = shipments;
+  shipments = shipments.map(item => item.number === shipment.number ? { ...item, route } : item);
+  if (!saveShipments()) {
+    shipments = previousShipments;
+    throw new Error('Le trajet corrigé n’a pas pu être enregistré sur cet appareil.');
+  }
+  return shipments.find(item => item.number === shipment.number) ?? shipment;
+}
+
 const placeName = location => [location.name, location.admin1, location.country]
   .filter((part, index, parts) => part && parts.indexOf(part) === index).join(', ');
 
 function setWeatherMapLocation(latitude, longitude) {
+  weatherMapCoordinates = { latitude, longitude };
+  const [overlay, level = 'surface'] = weatherMapLayer.value.split(':');
   const endpoint = new URL('https://embed.windy.com/embed.html');
   endpoint.search = new URLSearchParams({
     type: 'map',
@@ -687,10 +2028,10 @@ function setWeatherMapLocation(latitude, longitude) {
     metricRain: 'default',
     metricTemp: 'default',
     metricWind: 'default',
-    zoom: '6',
-    overlay: 'rain',
+    zoom: '2',
+    overlay,
     product: 'ecmwf',
-    level: 'surface',
+    level,
     lat: String(latitude),
     lon: String(longitude),
     detailLat: String(latitude),
@@ -699,6 +2040,10 @@ function setWeatherMapLocation(latitude, longitude) {
   }).toString();
   weatherMap.src = endpoint.toString();
 }
+
+weatherMapLayer.addEventListener('change', () => {
+  setWeatherMapLocation(weatherMapCoordinates.latitude, weatherMapCoordinates.longitude);
+});
 
 async function fetchCurrentWeather(latitude, longitude) {
   const endpoint = new URL('https://api.open-meteo.com/v1/forecast');
@@ -786,6 +2131,65 @@ function greatCircle(from, to, steps = 64) {
   });
 }
 
+function createNightArea(date = new Date()) {
+  const year = date.getUTCFullYear();
+  const yearStart = Date.UTC(year, 0, 1);
+  const dayOfYear = Math.floor((Date.UTC(year, date.getUTCMonth(), date.getUTCDate()) - yearStart) / 86_400_000) + 1;
+  const yearLength = new Date(Date.UTC(year, 1, 29)).getUTCDate() === 29 ? 366 : 365;
+  const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 +
+    date.getUTCSeconds() / 3600 + date.getUTCMilliseconds() / 3_600_000;
+  const gamma = 2 * Math.PI / yearLength * (dayOfYear - 1 + (utcHours - 12) / 24);
+  const equationOfTime = 229.18 * (
+    0.000075 + 0.001868 * Math.cos(gamma) - 0.032077 * Math.sin(gamma) -
+    0.014615 * Math.cos(2 * gamma) - 0.040849 * Math.sin(2 * gamma)
+  );
+  const declination = 0.006918 - 0.399912 * Math.cos(gamma) + 0.070257 * Math.sin(gamma) -
+    0.006758 * Math.cos(2 * gamma) + 0.000907 * Math.sin(2 * gamma) -
+    0.002697 * Math.cos(3 * gamma) + 0.00148 * Math.sin(3 * gamma);
+  const solarLongitude = 180 - (utcHours * 15 + equationOfTime / 4);
+  const longitude = ((solarLongitude + 360) % 360 - 180 + 180) % 360 - 180;
+  const centerLongitude = (longitude + 180 + 540) % 360 - 180;
+  const centerLatitude = -declination * 180 / Math.PI;
+  const latitudeRadians = centerLatitude * Math.PI / 180;
+  const longitudeRadians = centerLongitude * Math.PI / 180;
+  const center = [
+    Math.cos(latitudeRadians) * Math.cos(longitudeRadians),
+    Math.cos(latitudeRadians) * Math.sin(longitudeRadians),
+    Math.sin(latitudeRadians)
+  ];
+  const east = [-Math.sin(longitudeRadians), Math.cos(longitudeRadians), 0];
+  const north = [
+    -Math.sin(latitudeRadians) * Math.cos(longitudeRadians),
+    -Math.sin(latitudeRadians) * Math.sin(longitudeRadians),
+    Math.cos(latitudeRadians)
+  ];
+  const radius = 89.8 * Math.PI / 180;
+  const ring = Array.from({ length: 361 }, (_, index) => {
+    const angle = index / 360 * 2 * Math.PI;
+    const vector = center.map((value, axis) =>
+      value * Math.cos(radius) +
+      (east[axis] * Math.cos(angle) + north[axis] * Math.sin(angle)) * Math.sin(radius));
+    return [
+      Math.atan2(vector[1], vector[0]) * 180 / Math.PI,
+      Math.atan2(vector[2], Math.hypot(vector[0], vector[1])) * 180 / Math.PI
+    ];
+  });
+  ring.reverse();
+  ring[ring.length - 1] = ring[0];
+  return {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'Polygon', coordinates: [ring] }
+    }]
+  };
+}
+
+function updateDayNightOverlay() {
+  parcelGlobe?.getSource('parcel-night')?.setData(createNightArea());
+}
+
 function showParcelGlobePoints(points, { connect = true } = {}) {
   parcelMapPoints = points;
   parcelMapConnect = connect;
@@ -796,11 +2200,43 @@ function showParcelGlobePoints(points, { connect = true } = {}) {
   parcelGlobeMarkers = points.map((point, index) => {
     const element = document.createElement('span');
     const isDestination = index === points.length - 1;
+    const isOrigin = index === 0 && points.length > 1;
     element.className = `parcel-map-marker${isDestination ? ' is-destination' : index > 0 ? ' is-stop' : ''}`;
-    element.setAttribute('aria-hidden', 'true');
+    if (isDestination || isOrigin) {
+      const place = [point.name, point.label].filter(Boolean).join(' — ');
+      const label = isDestination ? 'destination' : 'origine';
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      element.setAttribute('aria-label', `Afficher l’${label} à l’échelle de la rue : ${place}`);
+      element.title = isDestination
+        ? 'Cliquez pour afficher la destination à l’échelle de la rue'
+        : 'Double-cliquez pour afficher l’origine à l’échelle de la rue';
+      const zoomToPlace = () => parcelGlobe.flyTo({
+        center: [point.longitude, point.latitude],
+        zoom: 15.5,
+        duration: 1800,
+        essential: true
+      });
+      if (isDestination) {
+        element.addEventListener('click', zoomToPlace);
+      } else {
+        element.addEventListener('dblclick', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          zoomToPlace();
+        });
+      }
+      element.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        zoomToPlace();
+      });
+    } else {
+      element.setAttribute('aria-hidden', 'true');
+    }
     return new Marker({ element, anchor: 'center' })
       .setLngLat([point.longitude, point.latitude])
-      .setPopup(new Popup({ offset: 12 }).setText(point.label))
+      .setPopup(new Popup({ offset: 12, className: 'parcel-map-popup' }).setText(point.label))
       .addTo(parcelGlobe);
   });
 
@@ -840,6 +2276,18 @@ function showParcelGlobePoints(points, { connect = true } = {}) {
   }
 }
 
+parcelMapElement.addEventListener('wheel', event => {
+  if (event.deltaMode !== 0 || !event.deltaY) return;
+  const rect = parcelMapElement.getBoundingClientRect();
+  const around = parcelGlobe?.unproject([event.clientX - rect.left, event.clientY - rect.top]);
+  if (!parcelGlobe || !around) return;
+  event.preventDefault();
+  parcelGlobe.zoomTo(parcelGlobe.getZoom() - event.deltaY * 0.004, {
+    around,
+    duration: 0
+  });
+}, { passive: false });
+
 function initializeParcelGlobe() {
   if (parcelGlobe) return;
   parcelGlobe = new MapLibreMap({
@@ -853,6 +2301,20 @@ function initializeParcelGlobe() {
   parcelGlobe.addControl(new NavigationControl(), 'top-right');
   parcelGlobe.once('load', () => {
     parcelGlobe.setProjection({ type: 'globe' });
+    parcelGlobe.addSource('parcel-night', {
+      type: 'geojson',
+      data: createNightArea()
+    });
+    parcelGlobe.addLayer({
+      id: 'parcel-night-shade',
+      type: 'fill',
+      source: 'parcel-night',
+      paint: {
+        'fill-color': '#172b43',
+        'fill-opacity': 0.34,
+        'fill-outline-color': '#b9c8da'
+      }
+    });
     parcelGlobe.addSource('parcel-route', {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] }
@@ -869,6 +2331,10 @@ function initializeParcelGlobe() {
       }
     });
     parcelGlobeLoaded = true;
+    window.setInterval(updateDayNightOverlay, 60_000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) updateDayNightOverlay();
+    });
     showParcelGlobePoints(parcelMapPoints, { connect: parcelMapConnect });
   });
 }
@@ -885,14 +2351,16 @@ if ('IntersectionObserver' in window) {
   initializeParcelGlobe();
 }
 
-async function requestParcelTracking(trackingNumber, requestId, destinationCountry) {
+async function requestParcelTracking(trackingNumber, requestId, destinationCountry, requestedCarrier, recipientDetails, provider) {
   const carrier = detectCarrier(trackingNumber);
+  const carrierHint = requestedCarrier || (carrier.hint ? carrier.id : '');
   const body = requestId
-    ? { requestId }
+    ? { requestId, ...(provider ? { provider } : {}) }
     : {
       trackingNumber,
-      ...(carrier.hint ? { carrierHint: carrier.id } : {}),
-      ...(destinationCountry ? { destinationCountry } : {})
+      ...(carrierHint ? { carrierHint, carrierHintExplicit: Boolean(requestedCarrier) } : {}),
+      ...(destinationCountry ? { destinationCountry } : {}),
+      ...(recipientDetails ? { recipientDetails } : {})
     };
   const response = await fetch('/api/tracking', {
     method: 'POST',
@@ -920,12 +2388,22 @@ async function requestParcelTracking(trackingNumber, requestId, destinationCount
     const message = result.error || `Suivi indisponible (${response.status}).`;
     const error = new Error(message);
     error.needsDestinationCountry = result.needsDestinationCountry === true;
+    error.needsRecipientDetails = result.needsRecipientDetails === true;
+    error.acceptedFields = Array.isArray(result.acceptedFields) ? result.acceptedFields : [];
+    error.inputRequirements = result.inputRequirements ?? null;
+    error.detail = typeof result.detail === 'string' ? result.detail : '';
     throw error;
   }
   return result;
 }
 
-async function updateSelectedParcelRoute({ fetchDetails = false, destinationCountry } = {}) {
+async function updateSelectedParcelRoute({
+  fetchDetails = false,
+  forceRefresh = false,
+  destinationCountry,
+  carrierHint,
+  recipientDetails
+} = {}) {
   if (!selectedTracking) {
     parcelRouteResult.textContent = 'Ajoutez un colis pour rechercher automatiquement son trajet.';
     parcelRouteResult.classList.remove('is-error');
@@ -934,10 +2412,16 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
     return;
   }
 
-  const shipment = shipments.find(item => item.number === selectedTracking);
+  let shipment = shipments.find(item => item.number === selectedTracking);
   if (!shipment) return;
   renderTrackingHistory(shipment);
   if (isValidStoredRoute(shipment.route)) {
+    let routeRefreshError = '';
+    try {
+      shipment = await refreshStoredRouteDestination(shipment);
+    } catch (error) {
+      routeRefreshError = error.message || 'la destination du dernier scan n’a pas pu être actualisée';
+    }
     const storedEvents = Array.isArray(shipment.tracking?.events) ? shipment.tracking.events : [];
     const storedFlightLegs = Array.isArray(shipment.tracking?.flightLegs) ? shipment.tracking.flightLegs : [];
     const storedPoints = Array.isArray(shipment.route.stops) && shipment.route.stops.length > 1
@@ -959,7 +2443,7 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
     })), {
       connect: shipment.route.connect ?? (!isCarrierRoute || storedPoints.length > 2)
     });
-    if (Array.isArray(shipment.tracking?.events) && (storedEvents.length > 0 || !fetchDetails)) {
+    if (!forceRefresh && Array.isArray(shipment.tracking?.events) && (storedEvents.length > 0 || !fetchDetails)) {
       const storedFlightLeg = storedFlightLegs.find(item => item.origin || item.destination);
       const hasStoredFlightRoute = isCarrierRoute &&
         storedPoints.length === 2 &&
@@ -985,6 +2469,7 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
         parcelRouteResult.textContent =
           `${storedPoints[0].name} → ${storedPoints.at(-1).name} · ${Math.max(0, storedPoints.length - 2)} étape(s) cartographiée(s)`;
       }
+      if (routeRefreshError) parcelRouteResult.textContent += ` · ${routeRefreshError}`;
       parcelRouteResult.classList.remove('is-error');
       return;
     }
@@ -1002,10 +2487,16 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
   parcelRouteResult.textContent = 'Récupération des étapes et du trajet auprès du transporteur…';
   parcelRouteResult.classList.remove('is-error');
   try {
-    let result = await requestParcelTracking(trackingNumber, undefined, country);
+    let result = await requestParcelTracking(
+      trackingNumber,
+      undefined,
+      country,
+      carrierHint || shipment.carrierHint,
+      recipientDetails
+    );
     for (let attempt = 0; result.pending && attempt < 8; attempt += 1) {
       await new Promise(resolve => window.setTimeout(resolve, 1500));
-      result = await requestParcelTracking(trackingNumber, result.requestId);
+      result = await requestParcelTracking(trackingNumber, result.requestId, undefined, undefined, undefined, result.provider);
     }
     if (result.pending) throw new Error('Le transporteur n’a pas encore terminé la recherche du colis.');
 
@@ -1021,18 +2512,16 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
         return left.index - right.index;
       })
       .map(item => item.event);
-    const eventLocations = [];
+    const allEventLocations = [];
     for (const event of chronologicalEvents) {
       const location = typeof event.location === 'string' ? event.location.trim() : '';
       const eventPlaces = [location, event.flightOrigin, event.flightDestination, event.station]
         .filter(value => typeof value === 'string' && value.trim());
       for (const place of eventPlaces) {
-        if (!eventLocations.some(item => item.toLocaleLowerCase() === place.toLocaleLowerCase())) {
-          eventLocations.push(place);
+        if (!allEventLocations.some(item => item.toLocaleLowerCase() === place.toLocaleLowerCase())) {
+          allEventLocations.push(place);
         }
-        if (eventLocations.length >= 8) break;
       }
-      if (eventLocations.length >= 8) break;
     }
     const flightLegs = Array.isArray(result.flightLegs) ? result.flightLegs : [];
     const flightCodes = new Set(flightLegs
@@ -1042,19 +2531,21 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
       for (const place of [leg.origin, leg.destination]) {
         if (
           typeof place === 'string' &&
-          !eventLocations.some(item => item.toLocaleLowerCase() === place.toLocaleLowerCase())
-        ) eventLocations.push(place);
-        if (eventLocations.length >= 8) break;
+          !allEventLocations.some(item => item.toLocaleLowerCase() === place.toLocaleLowerCase())
+        ) allEventLocations.push(place);
       }
-      if (eventLocations.length >= 8) break;
     }
+    const eventLocations = allEventLocations.length <= 8
+      ? allEventLocations
+      : Array.from({ length: 8 }, (_, index) =>
+        allEventLocations[Math.floor(index * (allEventLocations.length - 1) / 7)]);
 
     const originName = typeof result.origin === 'string' && result.origin.trim() ? result.origin.trim() : '';
     const destinationName = typeof result.destination === 'string' && result.destination.trim() ? result.destination.trim() : '';
     const endpointQueries = [originName, destinationName].filter(Boolean);
     const [endpointResults, eventResults] = await Promise.all([
-      Promise.allSettled(endpointQueries.map(query => geocode(query))),
-      Promise.allSettled(eventLocations.map(query => geocode(query)))
+      Promise.allSettled(endpointQueries.map(query => geocodeRouteLocation(query))),
+      Promise.allSettled(eventLocations.map(query => geocodeRouteLocation(query)))
     ]);
     const endpointPlaces = new Map(endpointQueries.flatMap((query, index) =>
       endpointResults[index].status === 'fulfilled' ? [[query, endpointResults[index].value]] : []));
@@ -1079,7 +2570,14 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
     };
 
     let unresolvedStops = endpointResults.filter(result => result.status === 'rejected').length;
-    if (originName) addRoutePoint(endpointPlaces.get(originName), `Provenance : ${originName}`);
+    const mappedEventCount = eventResults.filter(result => result.status === 'fulfilled').length;
+    const addEndpoint = (name, label) => {
+      const place = endpointPlaces.get(name);
+      if (!place) return;
+      if (place.feature_code === 'PCLI' && mappedEventCount > 0) return;
+      addRoutePoint(place, label);
+    };
+    if (originName) addEndpoint(originName, `Provenance : ${originName}`);
     eventResults.forEach((resolution, index) => {
       if (resolution.status === 'fulfilled') {
         addRoutePoint(resolution.value, `Étape transporteur : ${eventLocations[index]}`);
@@ -1087,13 +2585,18 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
         unresolvedStops += 1;
       }
     });
-    if (destinationName) addRoutePoint(endpointPlaces.get(destinationName), `Destination : ${destinationName}`);
+    if (destinationName) addEndpoint(destinationName, `Destination : ${destinationName}`);
     const connectRoute = routePoints.length > 2 || mappedFlightPoints;
 
     const previousShipment = shipment;
     const tracking = {
+      provider: result.provider === '17TRACK' ? '17TRACK' : 'Parcels',
       status: result.status,
-      carrier: result.carrier,
+      carrier: result.carrier || shipment.carrierName,
+      carrierSlug: result.carrierSlug || carrierHint || shipment.carrierHint,
+      transportMode: result.transportMode,
+      originCountryCode: result.originCountryCode,
+      destinationCountryCode: result.destinationCountryCode,
       events: chronologicalEvents,
       flightLegs: Array.isArray(result.flightLegs) ? result.flightLegs : []
     };
@@ -1116,6 +2619,7 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
       return;
     }
     renderShipments();
+    void refreshDeliveryEstimate(trackingNumber, result, chronologicalEvents);
     const updatedShipment = shipments.find(item => item.number === trackingNumber);
     if (selectedTracking === trackingNumber) {
       renderTrackingHistory(updatedShipment);
@@ -1152,10 +2656,16 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
         ...previousShipment,
         tracking: {
           ...(previousShipment.tracking ?? {}),
-          carrier: previousShipment.tracking?.carrier || detectCarrier(trackingNumber).label,
+          carrier: previousShipment.tracking?.error
+            ? detectCarrier(trackingNumber).label
+            : previousShipment.tracking?.carrier || detectCarrier(trackingNumber).label,
           events: previousShipment.tracking?.events ?? [],
           error: error.message || 'Trajet automatique indisponible.',
-          needsDestinationCountry: error.needsDestinationCountry === true
+          detail: error.detail || '',
+          needsDestinationCountry: error.needsDestinationCountry === true,
+          needsRecipientDetails: error.needsRecipientDetails === true,
+          acceptedFields: error.acceptedFields ?? [],
+          inputRequirements: error.inputRequirements ?? null
         }
       };
       shipments = shipments.map(item => item.number === trackingNumber ? failedShipment : item);
@@ -1176,15 +2686,37 @@ async function updateSelectedParcelRoute({ fetchDetails = false, destinationCoun
 trackingCountryForm.addEventListener('submit', async event => {
   event.preventDefault();
   const country = trackingDestinationCountry.value.trim();
-  if (!country || !selectedTracking) return;
+  const carrierHint = trackingCarrierSelect.value;
+  const recipientDetails = {
+    postal_code: trackingRecipientPostalCode.value.trim(),
+    email: trackingRecipientEmail.value.trim(),
+    phone: trackingRecipientPhone.value.trim()
+  };
+  for (const [key, value] of Object.entries(recipientDetails)) {
+    if (!value) delete recipientDetails[key];
+  }
+  if (!selectedTracking) return;
+  if (!country && !carrierHint) {
+    trackingCarrierMessage.textContent = 'Choisissez le transporteur ou indiquez le pays de destination pour lancer la recherche.';
+    trackingCarrierSearch.focus();
+    return;
+  }
   const button = trackingCountryForm.querySelector('button[type="submit"]');
   button.disabled = true;
   try {
-    shipments = shipments.map(item => item.number === selectedTracking
-      ? { ...item, destinationCountry: country }
-      : item);
-    if (!saveShipments()) return;
-    await updateSelectedParcelRoute({ fetchDetails: true, destinationCountry: country });
+    if (country) {
+      shipments = shipments.map(item => item.number === selectedTracking
+        ? { ...item, destinationCountry: country }
+        : item);
+      if (!saveShipments()) return;
+    }
+    await updateSelectedParcelRoute({
+      fetchDetails: true,
+      forceRefresh: true,
+      destinationCountry: country,
+      carrierHint,
+      recipientDetails
+    });
   } finally {
     button.disabled = false;
   }
@@ -1320,6 +2852,22 @@ window.setInterval(() => {
   if (!document.hidden) refreshCurrentWeather();
 }, 600_000);
 
+window.setInterval(() => {
+  if (!document.hidden) {
+    renderDeliveryEstimate(shipments.find(item => item.number === selectedTracking));
+  }
+}, 60_000);
+
 renderShipments();
 updateParcelTrackingLink();
-updateSelectedParcelRoute();
+const selectedShipment = shipments.find(item => item.number === selectedTracking);
+const retryAmbiguousFedExDetection = Boolean(
+  selectedShipment &&
+  /^\d+$/.test(selectedShipment.number) &&
+  selectedShipment.tracking?.error &&
+  /^fedex$/i.test(selectedShipment.tracking.carrier ?? '')
+);
+updateSelectedParcelRoute({
+  fetchDetails: retryAmbiguousFedExDetection,
+  forceRefresh: retryAmbiguousFedExDetection
+});
