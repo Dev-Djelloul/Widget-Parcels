@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f7f3">
+    <meta name="description" content="Découvrez une démonstration fictive de Colis, votre tableau de bord de suivi.">
+    <title>Démo — Colis</title>
+    <link rel="stylesheet" href="demo.css">
+  </head>
+  <body>
+    <main class="demo-shell">
+      <header class="demo-header">
+        <a class="brand" href="/" aria-label="Colis, accueil">
+          <span class="brand-mark" aria-hidden="true">c<span>.</span></span>
+          <span>colis<span class="brand-period">.</span></span>
+        </a>
+        <a class="access-link" href="/">Mon espace <span aria-hidden="true">↗</span></a>
+      </header>
+
+      <section class="intro" aria-labelledby="demo-title">
+        <p class="eyebrow"><span aria-hidden="true"></span>DÉMONSTRATION</p>
+        <h1 id="demo-title">Vos colis,<br>en toute sérénité<span>.</span></h1>
+        <p class="intro-copy">Un aperçu de votre espace de suivi, avec un colis entièrement fictif.</p>
+        <p class="demo-notice"><span aria-hidden="true">ⓘ</span> Démo statique : aucune donnée réelle et aucun appel aux API de suivi.</p>
+      </section>
+
+      <section class="tracking-card" aria-labelledby="parcel-title">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">SUIVI EN DIRECT</p>
+            <h2 id="parcel-title">Votre colis</h2>
+          </div>
+          <span class="status"><span aria-hidden="true"></span>En transit</span>
+        </div>
+
+        <div class="parcel-summary">
+          <span class="parcel-icon" aria-hidden="true">▣</span>
+          <div>
+            <strong>Colis de démonstration</strong>
+            <span>Colissimo · Numéro fictif DEMO-2026</span>
+          </div>
+        </div>
+
+        <div class="arrival">
+          <span class="arrival-icon" aria-hidden="true">◷</span>
+          <div>
+            <span>Arrivée estimée</span>
+            <strong>Demain, avant 18 h</strong>
+          </div>
+        </div>
+
+        <ol class="timeline" aria-label="Étapes fictives du suivi">
+          <li class="complete">
+            <span class="timeline-marker" aria-hidden="true">✓</span>
+            <div><time datetime="2026-10-15T21:34:00+02:00">15 oct. · 21:34</time><strong>Arrivé au centre de tri local</strong><span>Lyon, France</span></div>
+          </li>
+          <li class="complete">
+            <span class="timeline-marker" aria-hidden="true">✓</span>
+            <div><time datetime="2026-10-15T16:12:00+02:00">15 oct. · 16:12</time><strong>En transit vers votre région</strong><span>Centre de tri, France</span></div>
+          </li>
+          <li class="complete">
+            <span class="timeline-marker" aria-hidden="true">✓</span>
+            <div><time datetime="2026-10-14T10:05:00+02:00">14 oct. · 10:05</time><strong>Colis pris en charge</strong><span>Expéditeur, France</span></div>
+          </li>
+        </ol>
+        <p class="time-note">Horaires affichés en heure de Paris · données fictives</p>
+      </section>
+
+      <footer class="demo-footer">
+        <span>Colis<span class="brand-period">.</span> · Démonstration personnelle</span>
+        <a href="/">Accéder à mon espace privé <span aria-hidden="true">→</span></a>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -6,7 +6,9 @@ const root = dirname(fileURLToPath(import.meta.url));
 const output = resolve(root, 'dist');
 const appFiles = [
   'index.html',
+  'demo.html',
   'styles.css',
+  'demo.css',
   'app.js',
   'manifest.webmanifest',
   'service-worker.js'
