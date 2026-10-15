@@ -2160,34 +2160,15 @@ function createNightArea(date = new Date()) {
     0.002697 * Math.cos(3 * gamma) + 0.00148 * Math.sin(3 * gamma);
   const solarLongitude = 180 - (utcHours * 15 + equationOfTime / 4);
   const longitude = ((solarLongitude + 360) % 360 - 180 + 180) % 360 - 180;
-  const centerLongitude = (longitude + 180 + 540) % 360 - 180;
-  const centerLatitude = -declination * 180 / Math.PI;
-  const latitudeRadians = centerLatitude * Math.PI / 180;
-  const longitudeRadians = centerLongitude * Math.PI / 180;
-  const center = [
-    Math.cos(latitudeRadians) * Math.cos(longitudeRadians),
-    Math.cos(latitudeRadians) * Math.sin(longitudeRadians),
-    Math.sin(latitudeRadians)
-  ];
-  const east = [-Math.sin(longitudeRadians), Math.cos(longitudeRadians), 0];
-  const north = [
-    -Math.sin(latitudeRadians) * Math.cos(longitudeRadians),
-    -Math.sin(latitudeRadians) * Math.sin(longitudeRadians),
-    Math.cos(latitudeRadians)
-  ];
-  const radius = 89.8 * Math.PI / 180;
-  const ring = Array.from({ length: 361 }, (_, index) => {
-    const angle = index / 360 * 2 * Math.PI;
-    const vector = center.map((value, axis) =>
-      value * Math.cos(radius) +
-      (east[axis] * Math.cos(angle) + north[axis] * Math.sin(angle)) * Math.sin(radius));
-    return [
-      Math.atan2(vector[1], vector[0]) * 180 / Math.PI,
-      Math.atan2(vector[2], Math.hypot(vector[0], vector[1])) * 180 / Math.PI
-    ];
-  });
-  ring.reverse();
-  ring[ring.length - 1] = ring[0];
+  // Terminator latitude for each longitude, closed through the pole that is in darkness.
+  const safeDeclination = Math.abs(declination) < 1e-4 ? 1e-4 : declination;
+  const nightPole = safeDeclination > 0 ? -90 : 90;
+  const ring = [[-180, nightPole]];
+  for (let lon = -180; lon <= 180; lon += 2) {
+    const hourAngle = (lon - longitude - 180) * Math.PI / 180;
+    ring.push([lon, Math.atan(-Math.cos(hourAngle) / Math.tan(safeDeclination)) * 180 / Math.PI]);
+  }
+  ring.push([180, nightPole], [-180, nightPole]);
   return {
     type: 'FeatureCollection',
     features: [{
