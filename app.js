@@ -1807,7 +1807,19 @@ function renderShipments() {
           renderShipments();
         }
       });
-      correctionForm.append(instructions, search, carrierSelect, country, postalCode, email, phone, message, submit);
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'shipment-carrier-cancel';
+      cancel.textContent = 'Annuler';
+      const closeCorrection = () => {
+        editingCarrierShipment = '';
+        renderShipments();
+      };
+      cancel.addEventListener('click', closeCorrection);
+      correctionForm.addEventListener('keydown', event => {
+        if (event.key === 'Escape') closeCorrection();
+      });
+      correctionForm.append(instructions, search, carrierSelect, country, postalCode, email, phone, message, cancel, submit);
       item.append(correctionForm);
     }
     shipmentList.append(item);
