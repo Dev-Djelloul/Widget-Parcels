@@ -1403,7 +1403,7 @@ function renderTrackingHistory(shipment) {
     return;
   }
 
-  for (const event of events) {
+  for (const event of [...events].reverse()) {
     const item = document.createElement('li');
     item.className = 'tracking-event';
     const time = document.createElement('time');
@@ -1439,7 +1439,7 @@ function renderTrackingHistory(shipment) {
     item.append(time, content);
     trackingEvents.append(item);
   }
-  for (const leg of flightLegs) {
+  for (const leg of [...flightLegs].reverse()) {
     const item = document.createElement('li');
     item.className = 'tracking-event';
     const time = document.createElement('time');
