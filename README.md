@@ -1,34 +1,68 @@
 # Widget Parcels
 
-Widget Parcels est un tableau de bord bilingue de suivi de colis. Il enregistre les numéros de suivi et les préférences dans le navigateur, affiche les heures de plusieurs fuseaux horaires et des actualités françaises, intègre le widget de suivi Parcel App et propose une carte météo Windy avec les conditions actuelles d’une ville ou d’un pays choisi manuellement. Pour une recherche portant uniquement sur un pays, la météo est calculée à partir d’un point central approximatif. Le globe interactif trace les lieux de scan et les escales aériennes transmis par l’API Parcels ; si seuls l’origine et la destination sont disponibles, il affiche les points sans inventer un trajet intermédiaire. Certains transporteurs exigent le pays de destination pour être détectés ; l’application le demande alors avant de relancer la recherche. Le trajet reste indicatif et ne représente pas la position réelle du colis.
+Widget Parcels est une application web progressive (PWA) en français pour centraliser le suivi de colis, les informations de trajet et quelques outils utiles au quotidien. L’interface est statique ; une fonction Cloudflare Pages protège la clé API utilisée pour le suivi détaillé.
 
-## Lancer l’application en local
+## Fonctionnalités
 
-Utilisez Node.js et npm pour compiler l’application statique :
+- Enregistrer plusieurs colis sur l’appareil, les sélectionner, les renommer et les retirer.
+- Détecter certains transporteurs à partir du numéro et récupérer les événements détaillés via l’API Parcels v4. Si nécessaire, l’application demande le pays de destination avant de réessayer.
+- Afficher les étapes du suivi de la plus récente à la plus ancienne. La carte représente le trajet de la provenance vers la destination ; elle ne donne pas la position GPS du colis.
+- Visualiser sur un globe interactif les lieux de scan et escales aériennes transmis par le transporteur. Les étapes manquantes ne sont pas inventées ; les lieux peuvent aussi être saisis manuellement.
+- Ouvrir la fiche et le widget Parcel App pour consulter des informations complémentaires.
+- Consulter les heures locale, UTC, Tokyo et New York, ainsi que des actualités françaises actualisées périodiquement.
+- Rechercher la météo d’une ville ou d’un pays, afficher la carte Windy et, sur demande, utiliser la position de l’appareil.
+- Installer l’application comme PWA. Le service worker met en cache les ressources de l’interface pour permettre de la rouvrir hors ligne ; le suivi, les cartes, la météo et les actualités nécessitent Internet.
+- Choisir un thème clair ou sombre et réduire le menu latéral. Les préférences sont mémorisées sur l’appareil.
+
+## Développement local
+
+Prérequis : Node.js et npm.
 
 ```bash
 npm install
 npm run build
+npx wrangler pages dev dist
 ```
 
-Servez le répertoire du projet ou le répertoire généré `dist/` avec n’importe quel serveur HTTP statique. L’application peut également être utilisée sans compilation en servant directement le répertoire du projet.
+Wrangler sert le site et la fonction `functions/api/tracking.js`. Pour tester les requêtes de suivi en local, créez un fichier `.dev.vars` à la racine du projet :
+
+```dotenv
+PARCELS_API_KEY=votre_cle_api_parcels
+```
+
+Ne partagez pas ce fichier et ne le commitez pas : il contient un secret. Ne placez jamais la clé dans le code ou dans le navigateur. Sans clé configurée, les autres parties de l’interface restent utilisables, mais le suivi détaillé par l’API ne fonctionnera pas.
+
+## Déploiement sur Cloudflare Pages
+
+Authentifiez Wrangler, puis ajoutez la clé comme secret Cloudflare Pages. Wrangler demandera sa valeur :
+
+```bash
+npx wrangler login
+npx wrangler pages secret put PARCELS_API_KEY --project-name colis-digitalblueskye
+npm run deploy
+```
+
+Le script `deploy` compile l’application dans `dist/`, puis publie les fichiers statiques et la fonction `/api/tracking`. Le nom du projet Pages est défini dans `package.json` ; adaptez-le si vous déployez vers un autre projet. Le déploiement est manuel.
+
+## Données et confidentialité
+
+Les numéros de suivi, les événements récupérés, les lieux du trajet et les préférences sont stockés dans le stockage local du navigateur : ils ne sont pas synchronisés entre appareils. Effacer les données du site dans le navigateur peut les supprimer. Le suivi détaillé transmet le numéro et, si nécessaire, le pays de destination à la fonction Cloudflare puis à l’API Parcels ; chaque recherche peut consommer le quota de l’abonnement Parcels.
+
+La position de l’appareil n’est utilisée qu’après avoir choisi « Utiliser ma position » et sert à centrer la météo. Elle n’est pas transmise au service d’actualités. Les appels météo, actualités, géocodage et cartes utilisent les services tiers ci-dessous.
 
 ## Services externes
 
-- Suivi des colis : widget [Parcel App](https://parcelsapp.com/) et API Parcels v4 (clé gardée comme secret Cloudflare Pages)
-- Géocodage et météo : [Open-Meteo](https://open-meteo.com/)
-- Carte météo et prévisions ECMWF : intégration [Windy](https://www.windy.com/)
-- Globe interactif et tuiles : [MapLibre GL JS](https://maplibre.org/maplibre-gl-js/) et [OpenFreeMap](https://openfreemap.org/)
-- Actualités françaises : flux RSS de [franceinfo](https://www.franceinfo.fr/titres.rss), converti par [RSS2JSON](https://rss2json.com/)
+| Usage | Service |
+| --- | --- |
+| Suivi détaillé et widget de colis | [Parcels / Parcel App](https://parcelsapp.com/) — API v4 via la fonction Cloudflare Pages |
+| Géocodage et données météo | [Open-Meteo](https://open-meteo.com/) |
+| Carte météo et prévisions ECMWF | [Windy](https://www.windy.com/) |
+| Globe interactif et fonds de carte | [MapLibre GL JS](https://maplibre.org/maplibre-gl-js/) et [OpenFreeMap](https://openfreemap.org/) |
+| Actualités françaises | Flux RSS de [franceinfo](https://www.franceinfo.fr/titres.rss), converti par [RSS2JSON](https://rss2json.com/) |
 
-Les numéros de suivi, les lieux du trajet et les préférences restent dans le stockage local du navigateur. La carte météo, les actualités, le géocodage, les tuiles de carte et l’API de suivi nécessitent une connexion Internet. L’API Parcels consomme le quota de l’abonnement pour chaque numéro distinct. La position n’est demandée qu’après action sur le bouton météo et n’est pas transmise au service d’actualités.
+## Structure du projet
 
-## Déploiement
-
-Pour activer le remplissage automatique du trajet, configurez une fois la clé API comme secret Cloudflare Pages, sans la saisir dans le code ni dans le navigateur :
-
-```bash
-npx wrangler pages secret put PARCELS_API_KEY --project-name colis-digitalblueskye
-```
-
-Wrangler demandera la valeur de façon interactive. Le déploiement est manuel : après vous être authentifié avec Wrangler (`npx wrangler login`), `npm run deploy` compile l’application et publie `dist/` ainsi que la fonction `/api/tracking` sur le projet Cloudflare Pages. Si vous utilisez un autre projet Pages, modifiez son nom dans `package.json`.
+- `index.html`, `styles.css`, `app.js` : interface et logique de l’application.
+- `functions/api/tracking.js` : proxy Cloudflare Pages vers l’API Parcels ; la clé reste côté serveur.
+- `service-worker.js`, `manifest.webmanifest`, `icons/` : installation PWA et cache de l’interface.
+- `build.js` : copie les fichiers nécessaires et MapLibre dans `dist/`.
