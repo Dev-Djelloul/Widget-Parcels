@@ -416,7 +416,11 @@ function loadShipments() {
     return Array.isArray(stored)
       ? stored
         .filter(item => typeof item?.number === 'string' && typeof item?.addedAt === 'string')
-        .map(item => ({ ...item, route: isValidStoredRoute(item.route) ? item.route : undefined }))
+        .map(item => ({
+          ...item,
+          manuallyDelivered: item.manuallyDelivered === true,
+          route: isValidStoredRoute(item.route) ? item.route : undefined
+        }))
       : [];
   } catch (error) {
     formMessage.textContent = 'Les colis enregistrés n’ont pas pu être lus.';
@@ -1085,6 +1089,17 @@ function getShipmentTrackingTimestamp(shipment) {
   return eventTimestamps.length ? Math.min(...eventTimestamps) : Date.parse(shipment.addedAt);
 }
 
+function isShipmentAutomaticallyDelivered(shipment) {
+  const deliverySignal = /(?:\bdelivered\b|\blivr(?:é|ée|és|ées)(?=$|[\s,.;:])|\bremis(?:e|es)? au destinataire\b|\b(?:livraison (?:effectuée|terminée)|delivery complet(?:e|ed))(?=$|[\s,.;:])|\bdistribu(?:é|ée|és|ées)(?=$|[\s,.;:]))/i;
+  const isDeliverySignal = value =>
+    typeof value === 'string' &&
+    !/\b(?:not|never|undelivered|attempted|exception|failed)\b|non[- ]livr/i.test(value) &&
+    deliverySignal.test(value);
+  const events = Array.isArray(shipment.tracking?.events) ? shipment.tracking.events : [];
+  return isDeliverySignal(shipment.tracking?.status) ||
+    events.some(event => isDeliverySignal(event?.state));
+}
+
 function getTransitDurationLabel(shipment) {
   const events = Array.isArray(shipment.tracking?.events) ? shipment.tracking.events : [];
   const datedEvents = events.flatMap(event => {
@@ -1578,6 +1593,20 @@ function renderShipments() {
         info.append(transit);
       }
     }
+    const automaticallyDelivered = isShipmentAutomaticallyDelivered(shipment);
+    const manuallyDelivered = shipment.manuallyDelivered === true;
+    if (automaticallyDelivered || manuallyDelivered) {
+      const deliveryBadge = document.createElement('span');
+      deliveryBadge.className = 'shipment-delivery-badge';
+      deliveryBadge.textContent = `Marqué como livré · ${
+        automaticallyDelivered && manuallyDelivered
+          ? 'suivi + vous'
+          : automaticallyDelivered
+            ? 'suivi'
+            : 'vous'
+      }`;
+      info.append(deliveryBadge);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'shipment-actions';
@@ -1620,6 +1649,33 @@ function renderShipments() {
       }
     });
 
+    const isManuallyDelivered = shipment.manuallyDelivered === true;
+    const markDelivered = document.createElement('button');
+    markDelivered.className = 'shipment-delivery-toggle';
+    markDelivered.type = 'button';
+    markDelivered.textContent = isManuallyDelivered ? 'Annuler le marquage manuel' : 'Marquer comme livré';
+    markDelivered.setAttribute('aria-pressed', String(isManuallyDelivered));
+    markDelivered.setAttribute(
+      'aria-label',
+      isManuallyDelivered
+        ? `Annuler le marquage manuel du colis ${shipment.number}`
+        : `Marquer le colis ${shipment.number} comme livré`
+    );
+    markDelivered.addEventListener('click', () => {
+      const previousShipments = shipments;
+      shipments = shipments.map(saved =>
+        saved.number === shipment.number
+          ? { ...saved, manuallyDelivered: !isManuallyDelivered }
+          : saved
+      );
+      if (!saveShipments()) {
+        shipments = previousShipments;
+        return;
+      }
+      renderShipments();
+      showMessage(isManuallyDelivered ? 'Marquage manuel du colis annulé.' : 'Colis marqué comme livré.');
+    });
+
     const remove = document.createElement('button');
     remove.className = 'shipment-remove';
     remove.type = 'button';
@@ -1640,9 +1696,9 @@ function renderShipments() {
       updateSelectedParcelRoute();
     });
     if (shipment.number === editingShipment) {
-      actions.append(remove);
+      actions.append(markDelivered, remove);
     } else {
-      actions.append(select, rename, correctCarrier, remove);
+      actions.append(select, markDelivered, rename, correctCarrier, remove);
     }
     item.append(icon, info, actions);
     if (editingCarrierShipment === shipment.number) {
