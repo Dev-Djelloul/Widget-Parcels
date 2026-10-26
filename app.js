@@ -67,6 +67,7 @@ let carrierSearchTimeout;
 let carrierSearchSequence = 0;
 let trackingCarrierSelectionFor = '';
 let editingCarrierShipment = '';
+let openDeliveryUndo = '';
 const carrierInputRequirements = new Map();
 const trackingTranslations = new Map();
 const trackingTranslationJobs = new Set();
@@ -419,6 +420,7 @@ function loadShipments() {
         .map(item => ({
           ...item,
           manuallyDelivered: item.manuallyDelivered === true,
+          deliveryDismissed: item.deliveryDismissed === true,
           route: isValidStoredRoute(item.route) ? item.route : undefined
         }))
       : [];
@@ -1595,17 +1597,44 @@ function renderShipments() {
     }
     const automaticallyDelivered = isShipmentAutomaticallyDelivered(shipment);
     const manuallyDelivered = shipment.manuallyDelivered === true;
-    if (automaticallyDelivered || manuallyDelivered) {
-      const deliveryBadge = document.createElement('span');
+    const isDelivered = !shipment.deliveryDismissed && (automaticallyDelivered || manuallyDelivered);
+    if (isDelivered) {
+      const deliveryStatus = document.createElement('span');
+      deliveryStatus.className = 'shipment-delivery';
+      const deliveryBadge = document.createElement('button');
       deliveryBadge.className = 'shipment-delivery-badge';
-      deliveryBadge.textContent = `Marqué como livré · ${
-        automaticallyDelivered && manuallyDelivered
-          ? 'suivi + vous'
-          : automaticallyDelivered
-            ? 'suivi'
-            : 'vous'
-      }`;
-      info.append(deliveryBadge);
+      deliveryBadge.type = 'button';
+      deliveryBadge.textContent = 'Livré';
+      deliveryBadge.setAttribute('aria-expanded', String(openDeliveryUndo === shipment.number));
+      deliveryBadge.setAttribute('aria-label', `Options du statut livré pour le colis ${shipment.number}`);
+      deliveryBadge.addEventListener('click', () => {
+        openDeliveryUndo = openDeliveryUndo === shipment.number ? '' : shipment.number;
+        renderShipments();
+      });
+      deliveryStatus.append(deliveryBadge);
+      if (openDeliveryUndo === shipment.number) {
+        const undoDelivery = document.createElement('button');
+        undoDelivery.className = 'shipment-delivery-undo';
+        undoDelivery.type = 'button';
+        undoDelivery.textContent = 'Annuler';
+        undoDelivery.setAttribute('aria-label', `Annuler le marquage livré du colis ${shipment.number}`);
+        undoDelivery.addEventListener('click', () => {
+          const previousShipments = shipments;
+          shipments = shipments.map(saved =>
+            saved.number === shipment.number
+              ? { ...saved, manuallyDelivered: false, deliveryDismissed: true }
+              : saved
+          );
+          if (!saveShipments()) {
+            shipments = previousShipments;
+            return;
+          }
+          openDeliveryUndo = '';
+          renderShipments();
+        });
+        deliveryStatus.append(undoDelivery);
+      }
+      info.append(deliveryStatus);
     }
 
     const actions = document.createElement('div');
@@ -1649,31 +1678,25 @@ function renderShipments() {
       }
     });
 
-    const isManuallyDelivered = shipment.manuallyDelivered === true;
     const markDelivered = document.createElement('button');
     markDelivered.className = 'shipment-delivery-toggle';
     markDelivered.type = 'button';
-    markDelivered.textContent = isManuallyDelivered ? 'Annuler le marquage manuel' : 'Marquer comme livré';
-    markDelivered.setAttribute('aria-pressed', String(isManuallyDelivered));
-    markDelivered.setAttribute(
-      'aria-label',
-      isManuallyDelivered
-        ? `Annuler le marquage manuel du colis ${shipment.number}`
-        : `Marquer le colis ${shipment.number} comme livré`
-    );
+    markDelivered.textContent = 'Marquer comme livré';
+    markDelivered.setAttribute('aria-label', `Marquer le colis ${shipment.number} comme livré`);
     markDelivered.addEventListener('click', () => {
       const previousShipments = shipments;
       shipments = shipments.map(saved =>
         saved.number === shipment.number
-          ? { ...saved, manuallyDelivered: !isManuallyDelivered }
+          ? { ...saved, manuallyDelivered: true, deliveryDismissed: false }
           : saved
       );
       if (!saveShipments()) {
         shipments = previousShipments;
         return;
       }
+      openDeliveryUndo = '';
       renderShipments();
-      showMessage(isManuallyDelivered ? 'Marquage manuel du colis annulé.' : 'Colis marqué comme livré.');
+      showMessage('Colis marqué comme livré.');
     });
 
     const remove = document.createElement('button');
@@ -1695,10 +1718,11 @@ function renderShipments() {
       renderShipments();
       updateSelectedParcelRoute();
     });
+    if (!isDelivered) actions.append(markDelivered);
     if (shipment.number === editingShipment) {
-      actions.append(markDelivered, remove);
+      actions.append(remove);
     } else {
-      actions.append(select, markDelivered, rename, correctCarrier, remove);
+      actions.append(select, rename, correctCarrier, remove);
     }
     item.append(icon, info, actions);
     if (editingCarrierShipment === shipment.number) {
