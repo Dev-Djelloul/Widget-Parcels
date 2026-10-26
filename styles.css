@@ -216,9 +216,6 @@ h1 { font-size: clamp(30px, 3.1vw, 42px); letter-spacing: -1.8px; line-height: 1
 .shipment-item[data-tint="4"] { --shipment-tint: #eff6f6; }
 .shipment-item[data-tint="5"] { --shipment-tint: #f6f3e9; }
 .shipment-item:hover { border-color: var(--green); box-shadow: 0 5px 18px color-mix(in srgb, var(--green) 12%, transparent); }
-.shipment-item.is-pending { border-color: #79b98a; box-shadow: 0 0 0 1px color-mix(in srgb, #79b98a 32%, transparent), 0 0 13px color-mix(in srgb, #79b98a 28%, transparent); }
-.shipment-item.is-pending:hover { border-color: #4c9d65; box-shadow: 0 0 0 1px color-mix(in srgb, #4c9d65 42%, transparent), 0 0 17px color-mix(in srgb, #4c9d65 35%, transparent); }
-.shipment-item.is-pending.is-selected { border-color: #4c9d65; box-shadow: 0 0 0 2px color-mix(in srgb, #4c9d65 34%, transparent), 0 0 17px color-mix(in srgb, #4c9d65 30%, transparent); }
 .shipment-icon { align-items: center; background: var(--surface-soft); border-radius: 11px; color: var(--green); display: flex; font-family: Manrope, sans-serif; font-size: 11px; font-weight: 800; height: 46px; justify-content: center; letter-spacing: -.4px; overflow: hidden; padding: 3px; position: relative; text-align: center; }
 .carrier-icon-logo { background: #fff; border-radius: inherit; height: 100%; inset: 0; object-fit: contain; padding: 5px; position: absolute; width: 100%; }
 .carrier-icon-fallback[hidden] { display: none; }
@@ -255,6 +252,9 @@ h1 { font-size: clamp(30px, 3.1vw, 42px); letter-spacing: -1.8px; line-height: 1
 .shipment-save-name, .shipment-cancel-rename { background: transparent; border: 0; border-radius: 6px; color: var(--green); cursor: pointer; font-size: 9px; padding: 5px; }
 .shipment-cancel-rename { color: var(--muted); }
 .shipment-item.is-selected { border-color: var(--green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 22%, transparent); }
+.shipment-item.is-pending { border-color: #4c9d65; box-shadow: 0 0 0 1px color-mix(in srgb, #4c9d65 54%, transparent), 0 0 18px color-mix(in srgb, #4c9d65 42%, transparent); }
+.shipment-item.is-pending:hover { border-color: #34894e; box-shadow: 0 0 0 1px color-mix(in srgb, #34894e 58%, transparent), 0 0 20px color-mix(in srgb, #34894e 46%, transparent); }
+.shipment-item.is-pending.is-selected { border-color: #34894e; box-shadow: 0 0 0 2px color-mix(in srgb, #34894e 52%, transparent), 0 0 20px color-mix(in srgb, #34894e 42%, transparent); }
 .empty-state { align-items: center; display: flex; flex-direction: column; padding: 29px 12px 30px; text-align: center; }
 .empty-state[hidden] { display: none; }
 .empty-illustration { align-items: center; background: var(--surface-soft); border-radius: 50%; color: var(--green); display: flex; font-size: 23px; height: 53px; justify-content: center; margin-bottom: 13px; transform: rotate(-9deg); width: 53px; }
@@ -471,9 +471,9 @@ body.dark-theme .shipment-item[data-tint="2"] { --shipment-tint: #5a5545; }
 body.dark-theme .shipment-item[data-tint="3"] { --shipment-tint: #564b5c; }
 body.dark-theme .shipment-item[data-tint="4"] { --shipment-tint: #3e566b; }
 body.dark-theme .shipment-item[data-tint="5"] { --shipment-tint: #465565; }
-body.dark-theme .shipment-item.is-pending { border-color: #78d99a; box-shadow: 0 0 0 1px color-mix(in srgb, #78d99a 38%, transparent), 0 0 16px color-mix(in srgb, #78d99a 34%, transparent); }
+body.dark-theme .shipment-item.is-pending { border-color: #78d99a; box-shadow: 0 0 0 1px color-mix(in srgb, #78d99a 58%, transparent), 0 0 18px color-mix(in srgb, #78d99a 48%, transparent); }
 body.dark-theme .shipment-item.is-pending:hover,
-body.dark-theme .shipment-item.is-pending.is-selected { border-color: #91edaf; box-shadow: 0 0 0 2px color-mix(in srgb, #91edaf 42%, transparent), 0 0 20px color-mix(in srgb, #78d99a 42%, transparent); }
+body.dark-theme .shipment-item.is-pending.is-selected { border-color: #a1f6b9; box-shadow: 0 0 0 2px color-mix(in srgb, #a1f6b9 58%, transparent), 0 0 22px color-mix(in srgb, #78d99a 52%, transparent); }
 body.dark-theme .sidebar-current-parcel[data-tint="0"] { --shipment-tint: #40536a; }
 body.dark-theme .sidebar-current-parcel[data-tint="1"] { --shipment-tint: #405568; }
 body.dark-theme .sidebar-current-parcel[data-tint="2"] { --shipment-tint: #5a5545; }
