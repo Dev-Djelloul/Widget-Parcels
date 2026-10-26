@@ -1514,7 +1514,9 @@ function renderShipments() {
   let shipmentIndex = 0;
   for (const shipment of sortedShipments) {
     const item = document.createElement('article');
-    item.className = `shipment-item${shipment.number === selectedTracking ? ' is-selected' : ''}`;
+    const isDeliveredForCard = !shipment.deliveryDismissed &&
+      (shipment.manuallyDelivered === true || isShipmentAutomaticallyDelivered(shipment));
+    item.className = `shipment-item${shipment.number === selectedTracking ? ' is-selected' : ''}${isDeliveredForCard ? '' : ' is-pending'}`;
     item.dataset.tint = String(shipmentIndex % 6);
     shipmentIndex += 1;
 
